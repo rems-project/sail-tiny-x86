@@ -1,2 +1,2 @@
-default Order dec // bits are ordered, from left = most significant bit = last bit, to right = least significant bit = first bit
+default Order dec // LSB is index 0
 $include <prelude.sail>

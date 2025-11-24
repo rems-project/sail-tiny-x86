@@ -1,33 +1,3 @@
-type reg_index = range(0, 15) // range of registers that one can refer to
-
-/*
-* Memory addresses are 64 bits, but not all of these are allowed to be used. 
-* (Must verify that a memory address is valid before use. 
-* Implementing a flat memory model, so no segmentation.)
-*/
-type mem_addr = bits(64)
-
-type word_size = {8,16,32,64}
-type imm8 = bits(8)
-type imm16 = bits(16)
-type imm32 = bits(32)
-type imm64 = bits(64)
-union imm = {
-    IMM8: imm8,
-    IMM16: imm16,
-    IMM32: imm32,
-    IMM64: imm64
-}
-union reg_or_mem = {
-    rm_REG: reg_index,
-    rm_MEM: mem_addr
-}
-union any = {
-    rmi_IMM: imm,
-    rmi_REG: reg_index,
-    rmi_MEM: mem_addr
-}
-
 /* program counter */
 
 register RIP: bits(64)

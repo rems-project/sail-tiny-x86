@@ -1,7 +1,8 @@
 SAIL_DIR=`sail --dir`
+X86_FILES=prelude.sail operand_types.sail registers.sail operands.sail tiny-x86.sail tests.sail
 
 type-check:
-	sail prelude.sail operands.sail registers.sail tiny-x86.sail tests.sail
+	sail $(X86_FILES)
 
 test: test.o
 	./test.o;
@@ -9,7 +10,7 @@ test: test.o
 test.o: test.c
 	gcc test.c $(SAIL_DIR)/lib/*.c -lgmp -lz -I $(SAIL_DIR)/lib/ -o test.o;
 
-test.c: prelude.sail operands.sail registers.sail tiny-x86.sail tests.sail
-	sail -c prelude.sail operands.sail registers.sail tiny-x86.sail tests.sail -o test;
+test.c: prelude.sail operand_types.sail registers.sail operands.sail tiny-x86.sail tests.sail
+	sail -c $(X86_FILES) -o test;
 
 .PHONY: type-check test

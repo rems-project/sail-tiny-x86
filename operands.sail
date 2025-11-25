@@ -1,35 +1,39 @@
-/* range of registers that one can refer to */
-type reg_index = range(0, 15)
+// TODO: Implement read and write operand for memory
 
-/*
-* Memory addresses are 64 bits, but not all of these are allowed to be used. 
-* (Must verify that a memory address is valid before use. 
-* Implementing a flat memory model, so no segmentation.)
-*/
-type mem_addr = bits(64)
+/* read immediate value from variable bit-extended to 64 bits */
+val read_imm: forall 'm, 'm in {8, 16, 32, 64}. (int('m), generic_imm) -> bits('m)
+function read_imm(wsize, imm) = imm[wsize - 1 .. 0]
 
-/* permitted word sizes */
-type word_size = {8,16,32,64}
-
-/* immediate value types */
-type imm8 = bits(8)
-type imm16 = bits(16)
-type imm32 = bits(32)
-type imm64 = bits(64)
-union imm = {
-    IMM8: imm8,
-    IMM16: imm16,
-    IMM32: imm32,
-    IMM64: imm64
+/* read reg_or_mem operand */
+val read_rm_operand: forall 'm, 'm in {8, 16, 32, 64}. (int('m), reg_or_mem) -> bits('m)
+function read_rm_operand(wsize, operand: reg_or_mem) = {
+    match operand {
+        rm_REG(reg_index) => read_reg(wsize, reg_index),
+        _ => throw(EUnsupported("This operand is not supported"))
+    }
 }
 
-/* union types for operand */
-union reg_or_mem = {
-    rm_REG: reg_index,
-    rm_MEM: mem_addr
+/* read any (reg / mem / imm) operand */
+val read_rmi_operand: forall 'm, 'm in {8, 16, 32, 64}. (int('m), any) -> bits('m)
+function read_rmi_operand(wsize, operand: any) = {
+    match operand {
+        rmi_IMM(imm) => read_imm(wsize, imm),
+        rmi_REG(reg_index) => read_reg(wsize, reg_index),
+        _ => throw(EUnsupported("This operand is not supported"))
+    }
 }
-union any = {
-    rmi_IMM: imm,
-    rmi_REG: reg_index,
-    rmi_MEM: mem_addr
+
+/* overloaded function to read any operand type present in the ast */
+overload read_operand = {read_rm_operand, read_rmi_operand, read_imm, read_reg}
+
+/* write to reg or mem location */
+val write_rm_operand: forall 'm, 'm in {8, 16, 32, 64}. (int('m), reg_or_mem, bits('m)) -> unit
+function write_rm_operand(wsize: operand: reg_or_mem, value) = {
+    match operand {
+        rm_REG(reg_index) => write_reg(wsize, operand, value),
+        _ => throw(EUnsupported("This operand is not supported"))
+    }
 }
+
+/* overloaded function to write to any register or memory type */
+overload write_operand = {write_rm_operand, write_reg}

@@ -30,17 +30,17 @@ abort : Type, The type of memory aborts/access failure: To be
      expected to be for physical memory abort (e.g. SError in Arm)
 */
 enum Fault = {
-    // see 6.5.1 Call and Return Operation for Interrupt or Exception Handling Procedures (Intel manual)
-    Fault_DB, // Debug
-    Fault_NMI, // Non-maskable interrupt
-    Fault_DF, // Double Fault
-    Fault_NP, // Segment Not Present
-    Fault_SS, // Stack Segment Fault
-    Fault_GP, // General Protection
-    Fault_PF, // Page Fault
-    Fault_AC, // Alignment Check
-    Fault_MC, // Machine Check
-    Fault_CP, // Control Protection Exceptiobn
+  // see 6.5.1 Call and Return Operation for Interrupt or Exception Handling Procedures (Intel manual)
+  Fault_DB, // Debug
+  Fault_NMI, // Non-maskable interrupt
+  Fault_DF, // Double Fault
+  Fault_NP, // Segment Not Present
+  Fault_SS, // Stack Segment Fault
+  Fault_GP, // General Protection
+  Fault_PF, // Page Fault
+  Fault_AC, // Alignment Check
+  Fault_MC, // Machine Check
+  Fault_CP, // Control Protection Exception
 }
 type abort: Type = Fault
 
@@ -123,3 +123,46 @@ function mem_acc_is_exclusive    (acc : AccessDescriptor) -> bool = acc.acctype 
 
 // access is for part of an atomic read-modify-write instruction
 function mem_acc_is_atomic_rmw   (acc : AccessDescriptor) -> bool = acc.acctype == AccessType_RW & acc.atomicop
+
+/* instantiate */
+instantiation sail_mem_read with
+  'addr_size = addr_size,
+  'addr_space = addr_space,
+  'mem_acc = AccessDescriptor,
+  'abort = abort,
+  'CHERI = false,
+  'cap_size_log = 0,
+  mem_acc_is_explicit = mem_acc_is_explicit,
+  mem_acc_is_ifetch = mem_acc_is_ifetch,
+  mem_acc_is_ttw = mem_acc_is_ttw,
+  mem_acc_is_relaxed = mem_acc_is_relaxed,
+  mem_acc_is_rel_acq_rcpc = mem_acc_is_rel_acq_rcpc,
+  mem_acc_is_rel_acq_rcsc = mem_acc_is_rel_acq_rcsc,
+  mem_acc_is_standalone = mem_acc_is_standalone,
+  mem_acc_is_exclusive = mem_acc_is_exclusive,
+  mem_acc_is_atomic_rmw = mem_acc_is_atomic_rmw
+
+instantiation sail_mem_write with
+  'addr_size = addr_size,
+  'addr_space = addr_space,
+  'mem_acc = AccessDescriptor,
+  'abort = abort,
+  'CHERI = false,
+  'cap_size_log = 0,
+  mem_acc_is_explicit = mem_acc_is_explicit,
+  mem_acc_is_ifetch = mem_acc_is_ifetch,
+  mem_acc_is_ttw = mem_acc_is_ttw,
+  mem_acc_is_relaxed = mem_acc_is_relaxed,
+  mem_acc_is_rel_acq_rcpc = mem_acc_is_rel_acq_rcpc,
+  mem_acc_is_rel_acq_rcsc = mem_acc_is_rel_acq_rcsc,
+  mem_acc_is_standalone = mem_acc_is_standalone,
+  mem_acc_is_exclusive = mem_acc_is_exclusive,
+  mem_acc_is_atomic_rmw = mem_acc_is_atomic_rmw
+
+instantiation sail_mem_address_announce with
+  'addr_size = addr_size,
+  'addr_space = addr_space,
+  'mem_acc = AccessDescriptor,
+  'abort = abort,
+  'CHERI = false,
+  'cap_size_log = 0

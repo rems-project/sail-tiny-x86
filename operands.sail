@@ -28,9 +28,9 @@ overload read_operand = {read_rm_operand, read_rmi_operand, read_imm, read_reg}
 
 /* write to reg or mem location */
 val write_rm_operand: forall 'm, 'm in {8, 16, 32, 64}. (int('m), reg_or_mem, bits('m)) -> unit
-function write_rm_operand(wsize: operand: reg_or_mem, value) = {
+function write_rm_operand(wsize, operand: reg_or_mem, value) = {
     match operand {
-        rm_REG(reg_index) => write_reg(wsize, operand, value),
+        rm_REG(reg_index) => write_reg(wsize, reg_index, value),
         _ => throw(EUnsupported("This operand is not supported"))
     }
 }

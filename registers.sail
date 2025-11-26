@@ -41,14 +41,35 @@ let GPRs : vector(16, register(bits(64))) = [
     ref RAX
 ]
 
-/* status flags, part of register RFLAGS (which is mostly restricted access) */
-// could use bitfield for this
-register CF: bits(1) // bit 0
-register PF: bits(1) // bit 2
-register AF: bits(1) // bit 4
-register ZF: bits(1) // bit 6
-register SF: bits(1) // bit 7
-register OF: bits(1) // bit 11
+/* register RFLAGS, system and status flags + mostly restricted access */
+bitfield rflags : bits(64) = {
+    // system flags and IOPL field
+    ID: 21,
+    VIP: 20,
+    VIF: 19,
+    AC: 18,
+    VM: 17,
+    RF: 16,
+    NT: 14,
+    IOPL: 13 .. 12,
+    IF: 9,
+    TF: 8,
+
+    // status flags
+    OF: 11,
+    SF: 7,
+    ZF: 6,
+    AF: 4,
+    PF: 2,
+    CF: 0
+}
+register RFLAGS: rflags
+
+/* Code Segment register - bits 0-1 contain CPL (Current Provilege Level) of the currently executing program*/
+bitfield cs: bits(16) = {
+    CPL: 1 .. 0
+}
+register CS: cs
 
 /*
 read and write least-significant 8,16,32,64 (32 with 0 extend for write) bits 

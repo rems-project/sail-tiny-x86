@@ -1,49 +1,4 @@
 $include <concurrency_interface.sail>
-$include <concurrency_interface/tlbi.sail>
-$include <concurrency_interface/exception.sail>   
-$include <concurrency_interface/cache_op.sail>
-$include <concurrency_interface/translation.sail>
-$include <concurrency_interface/read_write_v2.sail>
-
-/* 
-   This interface depends on a few parameters:
-   - CHERI : Bool, Whether CHERI is active on this architecture, which means the
-     memory has capability tags
-   - cap_size_log : Int, If CHERI is on, the log2 of the size of capabilities in
-     bytes. For example for 16 bytes capabilities, this should be 4.
-*/
-
-// addr_size : Int, The size of addresses to be used, in bits
-type addr_size : Int = 64
-let addr_size' : int(64) = 64
-
-/*
-addr_space : Type, An extra tag on the address to identify its address
-     space. For Arm this is Secure/Non-Secure, for all other architecture this
-     should probably be unit.
-*/
-type addr_space : Type = unit
-let addr_space_def = ()
-
-/*
-abort : Type, The type of memory aborts/access failure: To be
-     returned when the access has failed. In system-level instantiations, this is
-     expected to be for physical memory abort (e.g. SError in Arm)
-*/
-enum Fault = {
-  // see 6.5.1 Call and Return Operation for Interrupt or Exception Handling Procedures (Intel manual)
-  Fault_DB, // Debug
-  Fault_NMI, // Non-maskable interrupt
-  Fault_DF, // Double Fault
-  Fault_NP, // Segment Not Present
-  Fault_SS, // Stack Segment Fault
-  Fault_GP, // General Protection
-  Fault_PF, // Page Fault
-  Fault_AC, // Alignment Check
-  Fault_MC, // Machine Check
-  Fault_CP, // Control Protection Exception
-}
-type abort: Type = Fault
 
 /*
    - mem_acc : Type, An architecture specific description of the access kind.
@@ -56,45 +11,31 @@ enum AccessType = {
 }
 struct AccessDescriptor = {
   acctype : AccessType,
-  cpl: bits(2), //  current privilege level
-  acqsc : bool,
-  acqpc : bool,
-  relsc : bool,
-  exclusive : bool,
   atomicop : bool,
+  standalone: bool,
   read : bool,
   write : bool,
 }
 function base_AccessDescriptor (acctype : AccessType) -> AccessDescriptor = struct {
   acctype = acctype,
-  cpl = 0b11, // lowest privilege level
-  acqsc = true, // acquire (load / read) sequential consistency applied
-  acqpc = false, // acquire with processor consistency (weaker than sequential consistency)
-  relsc = true, // release (store / write) sequential consistency applied
-  exclusive = false,
   atomicop = false,
+  standalone = true,
   read = false,
   write = false,
 }
 function create_iFetchAccessDescriptor() -> AccessDescriptor = {
   var accdesc = base_AccessDescriptor(AccessType_IFETCH);
   accdesc.read = true;
-  accdesc.write = false;
-  accdesc.cpl = CS[CPL];
   accdesc
 }
 function create_readAccessDescriptor() -> AccessDescriptor = {
   var accdesc = base_AccessDescriptor(AccessType_RW);
   accdesc.read = true;
-  accdesc.write = false;
-  accdesc.cpl = CS[CPL];
   accdesc
 }
 function create_writeAccessDescriptor() -> AccessDescriptor = {
   var accdesc = base_AccessDescriptor(AccessType_RW);
   accdesc.write = true;
-  accdesc.read = false;
-  accdesc.cpl = CS[CPL];
   accdesc
 }
 
@@ -107,30 +48,28 @@ function mem_acc_is_ifetch       (acc : AccessDescriptor) -> bool = acc.acctype 
 // Memory access is a translation table walk. False as memory model is flat.
 function mem_acc_is_ttw          (acc : AccessDescriptor) -> bool = false
 
-// Access is relaxed (can be reordered by hardware). False as we are implementing a model with sequential consistency.
-function mem_acc_is_relaxed      (acc : AccessDescriptor) -> bool = acc.acctype == AccessType_RW & not_bool(acc.acqpc) & not_bool(acc.acqsc) & not_bool(acc.relsc)
+// Access is relaxed 
+function mem_acc_is_relaxed      (acc : AccessDescriptor) -> bool = true
 
-// Access is release acquire rcpc = release consistent processor consistent
-function mem_acc_is_rel_acq_rcpc (acc : AccessDescriptor) -> bool = acc.acctype == AccessType_RW & acc.acqpc
-
-// Access is release acquire rcsc = release consistent sequentially consistent
-function mem_acc_is_rel_acq_rcsc (acc : AccessDescriptor) -> bool = acc.acctype == AccessType_RW & (acc.acqsc | acc.relsc)
+// Access uses release-acquire semantics
+function mem_acc_is_rel_acq_rcpc (acc : AccessDescriptor) -> bool = false
+function mem_acc_is_rel_acq_rcsc (acc : AccessDescriptor) -> bool = false
 
 // access is from a standalone instruction (not part of an atomic sequence of instructionns)
-function mem_acc_is_standalone   (acc : AccessDescriptor) -> bool = acc.acctype == AccessType_RW & not_bool(acc.exclusive) & not_bool(acc.atomicop)
+function mem_acc_is_standalone   (acc : AccessDescriptor) -> bool = acc.acctype == AccessType_RW & acc.standalone
 
 // access is part of an exclusive instruction 
-function mem_acc_is_exclusive    (acc : AccessDescriptor) -> bool = acc.acctype == AccessType_RW & acc.exclusive
+function mem_acc_is_exclusive    (acc : AccessDescriptor) -> bool = false
 
 // access is for part of an atomic read-modify-write instruction
 function mem_acc_is_atomic_rmw   (acc : AccessDescriptor) -> bool = acc.acctype == AccessType_RW & acc.atomicop
 
 /* instantiate */
 instantiation sail_mem_read with
-  'addr_size = addr_size,
-  'addr_space = addr_space,
+  'addr_size = 64,
+  'addr_space = unit,
   'mem_acc = AccessDescriptor,
-  'abort = abort,
+  'abort = unit,
   'CHERI = false,
   'cap_size_log = 0,
   mem_acc_is_explicit = mem_acc_is_explicit,
@@ -144,10 +83,10 @@ instantiation sail_mem_read with
   mem_acc_is_atomic_rmw = mem_acc_is_atomic_rmw
 
 instantiation sail_mem_write with
-  'addr_size = addr_size,
-  'addr_space = addr_space,
+  'addr_size = 64,
+  'addr_space = unit,
   'mem_acc = AccessDescriptor,
-  'abort = abort,
+  'abort = unit,
   'CHERI = false,
   'cap_size_log = 0,
   mem_acc_is_explicit = mem_acc_is_explicit,
@@ -160,29 +99,15 @@ instantiation sail_mem_write with
   mem_acc_is_exclusive = mem_acc_is_exclusive,
   mem_acc_is_atomic_rmw = mem_acc_is_atomic_rmw
 
-instantiation sail_mem_address_announce with
-  'addr_size = addr_size,
-  'addr_space = addr_space,
-  'mem_acc = AccessDescriptor,
-  'abort = abort,
-  'CHERI = false,
-  'cap_size_log = 0
-
 /* memory read and write */
-val iFetch : forall 'm, 'm >=1 & 'm <= 8. (bits(addr_size), int('m), AccessDescriptor) -> bits(8 * 'm)
-val rMem : forall 'm, 'm in {1, 2, 4, 8}. (bits(addr_size), int('m), AccessDescriptor) -> bits(8 * 'm)
-val wMem_Addr : (bits(addr_size)) -> unit
-val wMem : forall 'm, 'm in {1, 2, 4, 8}. (bits(addr_size), int('m), bits(8 * 'm), AccessDescriptor) -> unit
-val translate_address : (bits(64), AccessDescriptor) -> option(bits(addr_size))
-
 val read_memory : forall 'N, 'N > 0.
-  (int('N), bits(addr_size), AccessDescriptor) -> bits('N * 8)
+  (int('N), bits(64), AccessDescriptor) -> bits(8 * 'N)
 
 function read_memory(N, addr, accdesc) = {
-  let req : Mem_read_request('N, 0, addr_size, addr_space, AccessDescriptor) = struct {
+  let req : Mem_request('N, 0, 64, unit, AccessDescriptor) = struct {
     access_kind   = accdesc,
-    address       = truncate(addr, addr_size'),
-    address_space = addr_space_def,
+    address       = truncate(addr, 64),
+    address_space = (),
     size          = N,
     num_tag       = 0
   };
@@ -193,23 +118,16 @@ function read_memory(N, addr, accdesc) = {
   }
 }
 
-function iFetch(addr, bytes, accdesc) = read_memory(bytes, addr, accdesc)
-
-function rMem(addr, bytes, accdesc) = read_memory(bytes, addr, accdesc)
-
-function wMem_Addr(addr) = sail_address_announce(64, sail_zero_extend(addr, 64))
-
-function wMem(addr, bytes, value, accdesc) = {
-  let req : Mem_write_request('m, 0, addr_size, addr_space, AccessDescriptor) = struct {
+val write_memory : forall 'N, 'N > 0. (int('N), bits(64), bits(8 * 'N), AccessDescriptor) -> unit
+function write_memory(N, addr, value, accdesc) = {
+  let req : Mem_request('N, 0, 64, unit, AccessDescriptor) = struct {
     access_kind = accdesc,
-    address = truncate(addr, addr_size'),
-    address_space = addr_space_def,
-    size = bytes,
+    address = truncate(addr, 64),
+    address_space = (),
+    size = N,
     num_tag = 0,
-    value = to_bytes_le(bytes, value),
-    tags = []
   };
-  match sail_mem_write(req) {
+  match sail_mem_write(req,to_bytes_le(N, value),[]) {
     Ok(_) => (),
     Err(_) => exit(),
   }

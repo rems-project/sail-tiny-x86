@@ -1,3 +1,6 @@
+/* range of registers that one can refer to */
+type reg_index = range(0, 15)
+
 /* program counter */
 
 register RIP: bits(64)
@@ -64,12 +67,6 @@ bitfield rflags : bits(64) = {
     CF: 0
 }
 register RFLAGS: rflags
-
-/* Code Segment register - bits 0-1 contain CPL (Current Provilege Level) of the currently executing program*/
-bitfield cs: bits(16) = {
-    CPL: 1 .. 0
-}
-register CS: cs
 
 /*
 read and write least-significant 8,16,32,64 (32 with 0 extend for write) bits 

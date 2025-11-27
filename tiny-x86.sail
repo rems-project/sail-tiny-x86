@@ -1,16 +1,16 @@
 union ast = {
     // if one of the types is a tuple with first element word_size, the tuple represents (word_size, dest, src)
-    MOV: (word_size, reg_or_mem, any),
-    XOR: (word_size, reg_or_mem, any),
+    MOV: (word_size, rm_operand, rmi_operand),
+    XOR: (word_size, rm_operand, rmi_operand),
     SFENCE: unit,
     LFENCE: unit,
     MFENCE: unit,
-    CMP: (word_size, reg_or_mem, any),
-    PUSH: (word_size, any),
-    POP: (word_size, reg_or_mem),
-    ADD: (word_size, reg_or_mem, any),
-    SUB: (word_size, reg_or_mem, any),
-    IMUL: (word_size, reg_index, reg_or_mem), // IMUL with only 2 arguments (dest and src)
+    CMP: (word_size, rm_operand, rmi_operand),
+    PUSH: (word_size, rmi_operand),
+    POP: (word_size, rm_operand),
+    ADD: (word_size, rm_operand, rmi_operand),
+    SUB: (word_size, rm_operand, rmi_operand),
+    IMUL: (word_size, reg_index, rm_operand), // IMUL with only 2 arguments (dest and src)
     LEAVE: unit,
     RET: unit,
     JMP_short: imm8,

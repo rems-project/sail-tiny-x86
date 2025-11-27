@@ -1,8 +1,9 @@
 $include <concurrency_interface.sail>
 $include <concurrency_interface/tlbi.sail>
-$include <concurrency_interface/exception.sail>
+$include <concurrency_interface/exception.sail>   
 $include <concurrency_interface/cache_op.sail>
 $include <concurrency_interface/translation.sail>
+$include <concurrency_interface/read_write_v2.sail>
 
 /* 
    This interface depends on a few parameters:
@@ -166,3 +167,50 @@ instantiation sail_mem_address_announce with
   'abort = abort,
   'CHERI = false,
   'cap_size_log = 0
+
+/* memory read and write */
+val iFetch : forall 'm, 'm >=1 & 'm <= 8. (bits(addr_size), int('m), AccessDescriptor) -> bits(8 * 'm)
+val rMem : forall 'm, 'm in {1, 2, 4, 8}. (bits(addr_size), int('m), AccessDescriptor) -> bits(8 * 'm)
+val wMem_Addr : (bits(addr_size)) -> unit
+val wMem : forall 'm, 'm in {1, 2, 4, 8}. (bits(addr_size), int('m), bits(8 * 'm), AccessDescriptor) -> unit
+val translate_address : (bits(64), AccessDescriptor) -> option(bits(addr_size))
+
+val read_memory : forall 'N, 'N > 0.
+  (int('N), bits(addr_size), AccessDescriptor) -> bits('N * 8)
+
+function read_memory(N, addr, accdesc) = {
+  let req : Mem_read_request('N, 0, addr_size, addr_space, AccessDescriptor) = struct {
+    access_kind   = accdesc,
+    address       = truncate(addr, addr_size'),
+    address_space = addr_space_def,
+    size          = N,
+    num_tag       = 0
+  };
+
+  match sail_mem_read(req) {
+    Ok((bytes, _)) => from_bytes_le(bytes),
+    Err(_e) => { exit() }
+  }
+}
+
+function iFetch(addr, bytes, accdesc) = read_memory(bytes, addr, accdesc)
+
+function rMem(addr, bytes, accdesc) = read_memory(bytes, addr, accdesc)
+
+function wMem_Addr(addr) = sail_address_announce(64, sail_zero_extend(addr, 64))
+
+function wMem(addr, bytes, value, accdesc) = {
+  let req : Mem_write_request('m, 0, addr_size, addr_space, AccessDescriptor) = struct {
+    access_kind = accdesc,
+    address = truncate(addr, addr_size'),
+    address_space = addr_space_def,
+    size = bytes,
+    num_tag = 0,
+    value = to_bytes_le(bytes, value),
+    tags = []
+  };
+  match sail_mem_write(req) {
+    Ok(_) => (),
+    Err(_) => exit(),
+  }
+}

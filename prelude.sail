@@ -1,7 +1,6 @@
 default Order dec // LSB is index 0
-$include <prelude.sail>
-
 $define CONCURRENCY_INTERFACE_V2 // use concurrency_interface/read_write_v2.sail instead of v1
+$include <prelude.sail>
 
 // use equality overload from sail-tiny-arm
 val eq_any = pure {ocaml: "(fun (x, y) -> x = y)", interpreter: "eq_anything", lem: "eq", coq: "generic_eq", lean: "BEq.beq", c: "eq_anything"} : forall ('a : Type). ('a, 'a) -> bool

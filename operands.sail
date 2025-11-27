@@ -4,11 +4,22 @@
 val read_imm: forall 'm, 'm in {8, 16, 32, 64}. (int('m), generic_imm) -> bits('m)
 function read_imm(wsize, imm) = imm[wsize - 1 .. 0]
 
+function bits_to_bytes(value: {8, 16, 32, 64}) -> int = {
+    match value {
+        8 => 1,
+        16 => 2,
+        32 => 4,
+        64 => 8
+    }
+}
+
 /* read reg_or_mem operand */
 val read_rm_operand: forall 'm, 'm in {8, 16, 32, 64}. (int('m), reg_or_mem) -> bits('m)
 function read_rm_operand(wsize, operand: reg_or_mem) = {
+    let wsize_bytes = fdiv_int(wsize,8);
     match operand {
         rm_REG(reg_index) => read_reg(wsize, reg_index),
+        // rm_MEM(mem_addr) => rMem(mem_addr, wsize, create_readAccessDescriptor()),
         _ => throw(EUnsupported("This operand is not supported"))
     }
 }

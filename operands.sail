@@ -1,8 +1,4 @@
-/*
-* Memory addresses are 64 bits, but not all of these are allowed to be used. 
-* (Must verify that a memory address is valid before use. 
-* Implementing a flat memory model, so no segmentation.)
-*/
+/* Memory addresses are 64 bits. Assume all possible addresses can be used. */
 type mem_addr = bits(64)
 
 /* immediate value types */

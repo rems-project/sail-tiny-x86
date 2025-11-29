@@ -56,35 +56,50 @@ function clause execute(XOR(wsize, dest, src)) = {
     // sign flag = msb of result (0 = +ve, 1 = -ve)
     RFLAGS[SF] = [result[wsize - 1]];
     // set zero flag if result = 0, else clear zero flag
-    if result == sail_zero_extend(0x0, wsize) then 
-        RFLAGS[ZF] = 0b1
-    else
-        RFLAGS[ZF] = 0b0;
+    RFLAGS[ZF] = if result == sail_zero_extend(0x0, wsize) then 0b1 else 0b0;
     // set parity flag if least significant byte of result contains an even number of 1 bits, else clear
     modify_parity_flag(result);
 }
 
+// Wait_On_Following_Stores_Until(preceding_stores_globally_visible);
 function clause execute(SFENCE()) = {
     // apply barrier
     sail_barrier(Barrier_SFENCE)
 }
 
+// Wait_On_Following_Instructions_Until(preceding_instructions_complete);
 function clause execute(LFENCE()) = {
     // apply barrier
     sail_barrier(Barrier_LFENCE)
 }
 
+// Wait_On_Following_Loads_And_Stores_Until(preceding_loads_and_stores_globally_visible);
 function clause execute(MFENCE()) = {
     // apply barrier
     sail_barrier(Barrier_MFENCE)
 }
 
 function clause execute(CMP(wsize, first, second)) = {
+    // CMP cannot occur between first = memory location and second = memory location
     fail_if_two_mem_operands(first, second, "CMP");
     let first_val = read_operand(wsize, first);
     let second_val = read_operand(wsize, second);
+    // execute CMP instruction
+    let result = sub_bits(first_val, second_val);
 
-    // TODO: complete this function
+    /* change value of status flags. Equivalent to the changes made on executing the SUB instruction. */
+    // sign flag = msb of result (0 = +ve, 1 = -ve)
+    RFLAGS[SF] = [result[wsize - 1]];
+    // set overflow flag (which is for signed values) if first and second operand have opposite signs, but the sign of the result doesn't match the first operand, else clear
+    RFLAGS[OF] = if not_bool(first_val[wsize - 1] == second_val[wsize - 1]) & not_bool(result[wsize - 1] == first_val[wsize - 1]) then 0b1 else 0b0;
+    // set carry flag if result < 0 (as it represents a borrow when subtracting 2 unsigned values), else clear
+    RFLAGS[CF] = if unsigned(first_val) < unsigned(second_val) then 0b1 else 0b0;
+    // set zero flag if result = 0, else clear zero flag
+    RFLAGS[ZF] = if result == sail_zero_extend(0x0, wsize) then 0b1 else 0b0;
+    // Set aux carry flag if an arithmetic operation generates a borrow out of bit 3 (i.e. least significant 4 bits) of the result; cleared otherwise
+    RFLAGS[AF] = if unsigned(first_val[3 .. 0]) < unsigned(second_val[3 .. 0]) then 0b1 else 0b0;
+    // set parity flag if least significant byte of result contains an even number of 1 bits, else clear
+    modify_parity_flag(result);
 }
 
 end execute

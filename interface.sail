@@ -132,3 +132,13 @@ function write_memory(N, addr, value, accdesc) = {
     Err(_) => exit(),
   }
 }
+
+/* memory barrier */
+enum Barrier = {
+  Barrier_SFENCE, // store fence
+  Barrier_LFENCE, // load fence
+  Barrier_MFENCE // memory fence
+}
+
+instantiation sail_barrier with
+  'barrier = Barrier

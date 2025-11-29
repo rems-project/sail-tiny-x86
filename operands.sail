@@ -31,7 +31,7 @@ function read_imm(wsize, imm) = imm[wsize - 1 .. 0]
 /* read register or memory operand */
 val read_rm_operand: forall 'm, 'm in {8, 16, 32, 64}. (int('m), rm_operand) -> bits('m)
 function read_rm_operand(wsize, operand: rm_operand) = {
-    let wsize_bytes = tdiv_int(wsize,8);
+    let wsize_bytes = wsize / 8;
     assert('m == wsize_bytes * 8); // required for type-checking
     match operand {
         rm_REG(reg_index) => read_reg(wsize, reg_index),
@@ -42,7 +42,7 @@ function read_rm_operand(wsize, operand: rm_operand) = {
 /* read register / memory / immediate operand */
 val read_rmi_operand: forall 'm, 'm in {8, 16, 32, 64}. (int('m), rmi_operand) -> bits('m)
 function read_rmi_operand(wsize, operand: rmi_operand) = {
-    let wsize_bytes = tdiv_int(wsize,8);
+    let wsize_bytes = wsize / 8;
     assert('m == wsize_bytes * 8); // required for type-checking
     match operand {
         rmi_IMM(imm) => read_imm(wsize, imm),
@@ -57,7 +57,7 @@ overload read_operand = {read_rm_operand, read_rmi_operand, read_imm, read_reg}
 /* write to reg or mem location */
 val write_rm_operand: forall 'm, 'm in {8, 16, 32, 64}. (int('m), rm_operand, bits('m)) -> unit
 function write_rm_operand(wsize, operand: rm_operand, value) = {
-    let wsize_bytes = tdiv_int(wsize,8);
+    let wsize_bytes = wsize / 8;
     assert('m == wsize_bytes * 8); // required for type-checking
     match operand {
         rm_REG(reg_index) => write_reg(wsize, reg_index, value),

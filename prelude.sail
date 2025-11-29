@@ -8,6 +8,8 @@ val eq_bits_int : forall 'n 'm, 'n >= 0 & 'm >= 0. (bits('n), int('m)) -> bool
 function eq_bits_int (x, y) = (unsigned(x) == y)
 overload operator == = {eq_any, eq_bits_int}
 
+overload operator / = {tdiv_int}
+
 val fail: string -> unit
 function fail(message) = assert(false, message)
 

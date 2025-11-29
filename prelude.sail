@@ -10,3 +10,8 @@ overload operator == = {eq_any, eq_bits_int}
 
 val fail: string -> unit
 function fail(message) = assert(false, message)
+
+val flip_bit: bit -> bit
+function flip_bit(bit_to_flip) = {
+    if bit_to_flip == bitzero then bitone else bitzero;
+}

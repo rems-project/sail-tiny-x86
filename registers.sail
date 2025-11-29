@@ -59,19 +59,16 @@ bitfield rflags : bits(64) = {
     TF: 8,
 
     // status flags
-    OF: 11,
-    SF: 7,
-    ZF: 6,
-    AF: 4,
-    PF: 2,
-    CF: 0
+    OF: 11, // overflow flag
+    SF: 7, // sign flag
+    ZF: 6, // zero flag
+    AF: 4, // auxiliary carry flag
+    PF: 2, // parity flag
+    CF: 0 // carry flag
 }
 register RFLAGS: rflags
 
-/*
-read and write least-significant 8,16,32,64 (32 with 0 extend for write) bits 
- */
-
+/* read and write least-significant 8,16,32,64 (32 with 0 extend for write) bits */
  val read_reg: forall 'm, 'm in {8, 16, 32, 64}. (int('m), reg_index) -> bits('m)
 
  function read_reg(wsize, i: reg_index) = {
@@ -84,10 +81,21 @@ val write_reg: forall 'm, 'm in {8, 16, 32, 64}. (int('m), reg_index, bits('m)) 
 function write_reg(wsize, i: reg_index, value) = {
     if wsize == 32 then {
         // if writing 32 bits to a register, the value to be written is zero-extended to 64 bits
-        (*GPRs[i])[63 .. 32]= 0x0000_0000;
-        (*GPRs[i])[31 .. 0]= value;
+        (*GPRs[i])[63 .. 32] = 0x0000_0000;
+        (*GPRs[i])[31 .. 0] = value;
     }
     else
         // the value is written to the last wsize bits of the register
         (*GPRs[i])[wsize - 1 .. 0] = value;
+}
+
+/* change the value of the parity flag depending on the result of an operation */
+val modify_parity_flag: forall 'm, 'm >= 8. bits('m) -> unit
+function modify_parity_flag(result) = {
+    // we set if least significant byte of result has an even number of 1s, else clear
+    var even_parity = bitone;
+    foreach (i from 0 to 7) {
+        if result[i] == bitone then even_parity = flip_bit(even_parity);
+    };
+    RFLAGS[PF] = [even_parity];
 }

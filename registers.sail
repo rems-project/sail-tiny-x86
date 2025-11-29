@@ -59,12 +59,12 @@ bitfield rflags : bits(64) = {
     TF: 8,
 
     // status flags
-    OF: 11, // overflow flag
+    OF: 11, // overflow flag (for operations between signed values)
     SF: 7, // sign flag
     ZF: 6, // zero flag
     AF: 4, // auxiliary carry flag
     PF: 2, // parity flag
-    CF: 0 // carry flag
+    CF: 0 // carry flag (for operations between unsigned values)
 }
 register RFLAGS: rflags
 

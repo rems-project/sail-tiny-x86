@@ -102,4 +102,43 @@ function clause execute(CMP(wsize, first, second)) = {
     modify_parity_flag(result);
 }
 
+function clause execute(PUSH(wsize, src)) = {
+    // PUSH instruction does not allow src = imm64, reg8 or mem8
+    match src {
+        rmi_IMM(operand) if wsize == 64 => fail("Operand for PUSH operation not supported"),
+        rmi_REG(operand) if wsize == 8 => fail("Operand for PUSH operation not supported"),
+        rmi_MEM(operand) if wsize == 8 => fail("Operand for PUSH operation not supported")
+    };
+
+    let src_val = read_operand(wsize, src);
+    let wsize_bytes = wsize / 8;
+    RSP = sub_bits(RSP, get_slice_int(64, wsize_bytes, 0));
+    let dest_address = rm_MEM(RSP);
+    write_operand(wsize, dest_address, src_val)
+}
+
+function clause execute(SUB(wsize, dest, src)) = {
+    // SUB cannot occur between dest = memory location and src = memory location
+    fail_if_two_mem_operands(dest, src, "SUB");
+    let dest_val = read_operand(wsize, dest);
+    let src_val = read_operand(wsize, src);
+    // execute SUB instruction
+    let result = sub_bits(dest_val, src_val);
+    write_operand(wsize, dest, result);
+
+    /* change value of status flags */
+    // sign flag = msb of result (0 = +ve, 1 = -ve)
+    RFLAGS[SF] = [result[wsize - 1]];
+    // set overflow flag (which is for signed values) if dest and src operand have opposite signs, but the sign of the result doesn't match the dest operand, else clear
+    RFLAGS[OF] = if not_bool(dest_val[wsize - 1] == src_val[wsize - 1]) & not_bool(result[wsize - 1] == dest_val[wsize - 1]) then 0b1 else 0b0;
+    // set carry flag if result < 0 (as it represents a borrow when subtracting 2 unsigned values), else clear
+    RFLAGS[CF] = if unsigned(dest_val) < unsigned(src_val) then 0b1 else 0b0;
+    // set zero flag if result = 0, else clear zero flag
+    RFLAGS[ZF] = if result == sail_zero_extend(0x0, wsize) then 0b1 else 0b0;
+    // Set aux carry flag if an arithmetic operation generates a borrow out of bit 3 (i.e. least significant 4 bits) of the result; cleared otherwise
+    RFLAGS[AF] = if unsigned(dest_val[3 .. 0]) < unsigned(src_val[3 .. 0]) then 0b1 else 0b0;
+    // set parity flag if least significant byte of result contains an even number of 1 bits, else clear
+    modify_parity_flag(result);
+}
+
 end execute

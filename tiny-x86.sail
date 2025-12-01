@@ -22,11 +22,9 @@ union ast = {
 val fail_if_two_mem_operands : (rm_operand, rmi_operand, string) -> unit
 function fail_if_two_mem_operands(dest, src, operation) = {
     let error_message = concat_str(operation, " operation cannot occur between 2 memory locations");
-
-    assert(match (dest, src) {
-        (rm_MEM(x), rmi_MEM(y)) => false,
-        _ => true
-    }, error_message)
+    match (dest, src) {
+        (rm_MEM(_), rmi_MEM(_)) => fail(error_message)
+    }
 }
 
 val execute : ast -> unit
@@ -35,6 +33,10 @@ scattered function execute
 function clause execute(MOV(wsize, dest, src)) = {
     // MOV cannot occur between dest = memory location and src = memory location
     fail_if_two_mem_operands(dest, src, "MOV");
+    // MOV operation cannot be executed on dest = mem64 and src = imm64
+    match (dest, src) {
+        (rm_MEM(_), rmi_IMM(IMM64(_))) => fail("MOV operation cannot be executed on dest = mem64 and src = imm64")
+    };
     // execute MOV instruction
     let val_to_write = read_operand(wsize, src);
     write_operand(wsize, dest, val_to_write)
@@ -43,6 +45,10 @@ function clause execute(MOV(wsize, dest, src)) = {
 function clause execute(XOR(wsize, dest, src)) = {
     // XOR cannot occur between dest = memory location and src = memory location
     fail_if_two_mem_operands(dest, src, "XOR");
+    // For operation XOR, src = imm64 is not a valid operand 
+    match src {
+        rmi_IMM(IMM64(_)) => fail("For operation XOR, src = imm64 is not a valid operand")
+    };
     // execute XOR instruction
     let operand1 = read_operand(wsize, dest);
     let operand2 = read_operand(wsize, src);
@@ -82,9 +88,15 @@ function clause execute(MFENCE()) = {
 function clause execute(CMP(wsize, first, second)) = {
     // CMP cannot occur between first = memory location and second = memory location
     fail_if_two_mem_operands(first, second, "CMP");
+    // For operation CMP, second = imm64 is not a valid operand 
+    assert(match second {
+        rmi_IMM(IMM64(_)) => false,
+        _ => true
+    }, "For operation CMP, second = imm64 is not a valid operand");
+
+    // execute CMP instruction
     let first_val = read_operand(wsize, first);
     let second_val = read_operand(wsize, second);
-    // execute CMP instruction
     let result = sub_bits(first_val, second_val);
 
     /* change value of status flags. Equivalent to the changes made on executing the SUB instruction. */
@@ -105,9 +117,9 @@ function clause execute(CMP(wsize, first, second)) = {
 function clause execute(PUSH(wsize, src)) = {
     // PUSH instruction does not allow src = imm64, reg8 or mem8
     match src {
-        rmi_IMM(operand) if wsize == 64 => fail("Operand for PUSH operation not supported"),
-        rmi_REG(operand) if wsize == 8 => fail("Operand for PUSH operation not supported"),
-        rmi_MEM(operand) if wsize == 8 => fail("Operand for PUSH operation not supported")
+        rmi_IMM(_) if wsize == 64 => fail("Operand for PUSH operation not supported"),
+        rmi_REG(_) if wsize == 8 => fail("Operand for PUSH operation not supported"),
+        rmi_MEM(_) if wsize == 8 => fail("Operand for PUSH operation not supported")
     };
 
     let src_val = read_operand(wsize, src);
@@ -120,9 +132,14 @@ function clause execute(PUSH(wsize, src)) = {
 function clause execute(SUB(wsize, dest, src)) = {
     // SUB cannot occur between dest = memory location and src = memory location
     fail_if_two_mem_operands(dest, src, "SUB");
+    // For operation SUB, src = imm64 is not a valid operand 
+    match src {
+        rmi_IMM(IMM64(_)) => fail("For operation SUB, src = imm64 is not a valid operand")
+    };
+
+    // execute SUB instruction
     let dest_val = read_operand(wsize, dest);
     let src_val = read_operand(wsize, src);
-    // execute SUB instruction
     let result = sub_bits(dest_val, src_val);
     write_operand(wsize, dest, result);
 

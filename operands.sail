@@ -6,7 +6,12 @@ type imm8 = bits(8)
 type imm16 = bits(16)
 type imm32 = bits(32)
 type imm64 = bits(64)
-type generic_imm = bits(64)
+union imm = {
+    IMM8: imm8,
+    IMM16: imm16,
+    IMM32: imm32,
+    IMM64: imm64
+}
 
 /* union types for operand */
 // register or memory operand
@@ -16,7 +21,7 @@ union rm_operand = {
 }
 // register, memory, or immediate operand
 union rmi_operand = {
-    rmi_IMM: generic_imm,
+    rmi_IMM: imm,
     rmi_REG: reg_index,
     rmi_MEM: mem_addr
 }
@@ -25,8 +30,28 @@ union rmi_operand = {
 type word_size = {8,16,32,64}
 
 /* read immediate value from variable bit-extended to 64 bits */
-val read_imm: forall 'm, 'm in {8, 16, 32, 64}. (int('m), generic_imm) -> bits('m)
-function read_imm(wsize, imm) = imm[wsize - 1 .. 0]
+val read_imm: forall 'm, 'm in {8, 16, 32, 64}. (int('m), imm) -> bits('m)
+function read_imm(wsize, imm) = {
+    // If imm size is smaller than word size, then sign-extend the imm before returning it
+    match imm {
+        IMM8(value) => {
+            assert(wsize == 8, "Immediate value size is 8 bits, but word size is not.");
+            value[7 .. 0]
+        },
+        IMM16(value) => {
+            assert(wsize == 16, "Immediate value size is 16 bits, but word size is not.");
+            value[15 .. 0]
+        },
+        IMM32(value) => {
+            assert(wsize >= 32, "Immediate value size is 32 bits, but word size is not 32 or 64 bits.");
+            sail_sign_extend(value[31 .. 0], wsize)
+        },
+        IMM64(value) => {
+            assert(wsize == 64, "Immediate value size is 64 bits, but word size is not.");
+            value[63 .. 0]
+        },
+    }
+}
 
 /* read register or memory operand */
 val read_rm_operand: forall 'm, 'm in {8, 16, 32, 64}. (int('m), rm_operand) -> bits('m)

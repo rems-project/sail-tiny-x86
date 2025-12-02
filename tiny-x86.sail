@@ -12,11 +12,11 @@ union ast = {
     ADD: (word_size, rm_operand, rmi_operand),
     SUB: (word_size, rm_operand, rmi_operand),
     IMUL: (word_size, reg_index, rm_operand), // IMUL with only 2 arguments (dest and src)
+    CALL: imm32,
     LEAVE: unit,
-    RET: unit,
-    JMP_short: imm8,
-    JNS_short: imm8,
-    CALL: imm32
+    RET: unit, // near return only
+    JMP: imm8, // jump short only
+    JNS: imm8 // jump short if not sign only
 }
 
 val fail_if_two_mem_operands : (rm_operand, rmi_operand, string) -> unit
@@ -229,6 +229,50 @@ function clause execute(IMUL(wsize, dest, src)) = {
     else {
         RFLAGS[CF] = 0b1;
         RFLAGS[OF] = 0b1;
+    }
+}
+
+function clause execute(CALL(rel32)) = {
+    /* execute near relative call */
+    let displacement = read_operand(64, IMM32(rel32));
+    // push current RIP to the stack
+    let dest_address = rm_MEM(RSP);
+    write_operand(64, dest_address, RIP);
+    // change RIP as specified by the instruction
+    RIP = add_bits(RIP, displacement);
+}
+
+function clause execute(LEAVE()) = {
+    /* copy frame pointer (RBP) into the stack pointer register (RSP)
+    to release the stack space allocated to the topmost stack frame */
+    RSP = RBP;
+    /* pop from the top of the stack (RSP) into RBP
+    RBP now contains the old / now current base / frame pointer
+    */
+    RBP = read_operand(64, rm_MEM(RSP));
+    RSP = RSP + 8;
+}
+
+function clause execute(RET()) = {
+    /* execute near return */
+    // pop from the top of the stack (RSP) into RIP
+    RIP = read_operand(64, rm_MEM(RSP));
+    RSP = RSP + 8;
+}
+
+function clause execute(JMP(rel8)) = {
+    /* execute jump short */
+    // add the operand to the current instruction pointer value
+    let displacement = sail_sign_extend(read_operand(8, IMM8(rel8)), 64);
+    RIP = RIP + displacement;
+}
+
+function clause execute(JNS(rel8)) = {
+    /* execute jump short if not sign */
+    if RFLAGS[SF] == 0b0 then {
+        // add the operand to the current instruction pointer value
+        let displacement = sail_sign_extend(read_operand(8, IMM8(rel8)), 64);
+        RIP = RIP + displacement;
     }
 }
 

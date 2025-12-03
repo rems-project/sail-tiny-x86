@@ -126,36 +126,35 @@ function clause execute(PUSH(wsize, src)) = {
         _ => ()
     };
 
-    /* execute PUSH */
-    let src_val = read_operand(wsize, src);
-    let wsize_bytes = wsize / 8;
-    // fail with a stack fault if stack is not large enough for the item about to be pushed
-    if unsigned(RSP) < wsize_bytes then {
+    // If the source operand is an immediate of size less than the operand size, a sign-extended value is pushed on the stack
+    // default operand size is 8 bytes = 64 bits
+    let src_val = sail_sign_extend(read_operand(wsize, src), 64);
+    // fail with a stack fault if stack is not large enough to fit an 8 byte item
+    if unsigned(RSP) < 8 then {
         fail("Stack Fault #SS(0): Stack has insufficient space left")
     };
-    // continue push
-    RSP = sub_bits(RSP, get_slice_int(64, wsize_bytes, 0));
+    // subtract 8 from RSP to point to the new top of the stack
+    RSP = sub_bits(RSP, sail_zero_extend(0x8, 64));
     let dest_address = rm_MEM(RSP);
-    write_operand(wsize, dest_address, src_val)
+    // push the new item to the top of the stack
+    write_operand(64, dest_address, src_val)
 }
 
 function clause execute(POP(wsize, dest)) = {
-    // POP instruction does not allow dest = reg8 or mem8. Due to 64 bit addressing, dest also cannot be 32 bits long.
-    match dest {
-        _ if wsize == 8 => fail("8 bit operand for POP operation not supported"),
-        _ if wsize == 32 => fail("32 bit operand for POP operation not supported"),
-        _ => ()
-    };
+    // POP instruction does not allow dest to be 8 bits long. Due to 64 bit addressing, dest also cannot be 32 bits long.
+    if wsize == 8 then fail("8 bit operand for POP operation not supported");
+    if wsize == 32 then fail("32 bit operand for POP operation not supported");
 
     let wsize_bytes = wsize / 8;
     // fail with a stack fault if stack is too empty to pop an item
     if unsigned(RSP) > 2^64 - wsize_bytes then {
         fail("Stack Fault #SS(0): Stack is too empty to read value")
     };
-    // execute POP
+    // pop the value at the top of the stack to dest
     let popped_val = read_operand(wsize, rm_MEM(RSP));
-    RSP = add_bits(RSP, get_slice_int(64, wsize_bytes, 0));
     write_operand(wsize, dest, popped_val);
+    // increment stack pointer to free the popped stack space
+    RSP = RSP + wsize_bytes;
 }
 
 function clause execute(ADD(wsize, dest, src)) = {
@@ -248,8 +247,9 @@ function clause execute(CALL(rel32)) = {
     if unsigned(RSP) < 8 then {
         fail("Stack Fault #SS(0): Stack has fewer than 8 bytes of space left")
     };
-    // push current RIP to the stack (and change stack pointer (RSP) accordingly)
+    // update stack pointer to point to the new top of the stack
     RSP = sub_bits(RSP, sail_zero_extend(0x8, 64));
+    // push current RIP to the stack
     let dest_address = rm_MEM(RSP);
     write_operand(64, dest_address, RIP);
     // change RIP as specified by the instruction
@@ -264,8 +264,9 @@ function clause execute(LEAVE()) = {
     if unsigned(RSP) > 2^64 - 8 then {
         fail("Stack Fault #SS(0): Stack has fewer than 8 bytes of filled space")
     };
-    // pop from the top of the stack (RSP) into RBP
+    // pop value into RBP
     RBP = read_operand(64, rm_MEM(RSP));
+    // increment stack pointer to free the popped stack space
     RSP = RSP + 8;
 }
 
@@ -275,8 +276,9 @@ function clause execute(RET()) = {
     if unsigned(RSP) > 2^64 - 8 then {
         fail("Stack Fault #SS(0): Stack has fewer than 8 bytes of filled space")
     };
-    // pop from the top of the stack (RSP) into RIP
+    // pop value into RIP
     RIP = read_operand(64, rm_MEM(RSP));
+    // increment stack pointer to free the popped stack space
     RSP = RSP + 8;
 }
 

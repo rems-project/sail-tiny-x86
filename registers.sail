@@ -1,5 +1,5 @@
-/* range of registers that one can refer to */
-type reg_index = range(0, 15)
+/* register pointer type */
+type reg_ref = register(bits(64))
 
 /* program counter */
 
@@ -25,39 +25,8 @@ register R13: bits(64)
 register R14: bits(64)
 register R15: bits(64)
 
-let GPRs : vector(16, register(bits(64))) = [
-    ref R15,
-    ref R14,
-    ref R13,
-    ref R12,
-    ref R11,
-    ref R10,
-    ref R9,
-    ref R8,
-    ref RDI,
-    ref RSI,
-    ref RBP,
-    ref RSP,
-    ref RBX,
-    ref RDX,
-    ref RCX,
-    ref RAX
-]
-
 /* register RFLAGS, system and status flags + mostly restricted access */
 bitfield rflags : bits(64) = {
-    // system flags and IOPL field
-    ID: 21,
-    VIP: 20,
-    VIF: 19,
-    AC: 18,
-    VM: 17,
-    RF: 16,
-    NT: 14,
-    IOPL: 13 .. 12,
-    IF: 9,
-    TF: 8,
-
     // status flags
     OF: 11, // overflow flag (for operations between signed values)
     SF: 7, // sign flag
@@ -69,24 +38,23 @@ bitfield rflags : bits(64) = {
 register RFLAGS: rflags
 
 /* read and write least-significant 8,16,32,64 (32 with 0 extend for write) bits */
- val read_reg: forall 'm, 'm in {8, 16, 32, 64}. (int('m), reg_index) -> bits('m)
+ val read_reg: forall 'm, 'm in {8, 16, 32, 64}. (int('m), reg_ref) -> bits('m)
 
- function read_reg(wsize, i: reg_index) = {
-    let reg = *GPRs[i];
-    reg[wsize - 1 .. 0]
+ function read_reg(wsize, reg_ref) = {
+    (*reg_ref)[wsize - 1 .. 0]
 }
 
-val write_reg: forall 'm, 'm in {8, 16, 32, 64}. (int('m), reg_index, bits('m)) -> unit
+val write_reg: forall 'm, 'm in {8, 16, 32, 64}. (int('m), reg_ref, bits('m)) -> unit
 
-function write_reg(wsize, i: reg_index, value) = {
+function write_reg(wsize, reg_ref, value) = {
     if wsize == 32 then {
         // if writing 32 bits to a register, the value to be written is zero-extended to 64 bits
-        (*GPRs[i])[63 .. 32] = 0x0000_0000;
-        (*GPRs[i])[31 .. 0] = value;
+        (*reg_ref)[63 .. 32] = 0x0000_0000;
+        (*reg_ref)[31 .. 0] = value;
     }
     else
         // the value is written to the last wsize bits of the register
-        (*GPRs[i])[wsize - 1 .. 0] = value;
+        (*reg_ref)[wsize - 1 .. 0] = value;
 }
 
 /* change the value of the parity flag depending on the result of an operation */

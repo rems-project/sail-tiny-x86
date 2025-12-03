@@ -126,9 +126,14 @@ function clause execute(PUSH(wsize, src)) = {
         _ => ()
     };
 
-    // execute PUSH
+    /* execute PUSH */
     let src_val = read_operand(wsize, src);
     let wsize_bytes = wsize / 8;
+    // fail with a stack fault if stack is not large enough for the item about to be pushed
+    if unsigned(RSP) < wsize_bytes then {
+        fail("Stack Fault #SS(0): Stack has insufficient space left")
+    };
+    // continue push
     RSP = sub_bits(RSP, get_slice_int(64, wsize_bytes, 0));
     let dest_address = rm_MEM(RSP);
     write_operand(wsize, dest_address, src_val)
@@ -142,9 +147,13 @@ function clause execute(POP(wsize, dest)) = {
         _ => ()
     };
 
+    let wsize_bytes = wsize / 8;
+    // fail with a stack fault if stack is too empty to pop an item
+    if unsigned(RSP) > 2^64 - wsize_bytes then {
+        fail("Stack Fault #SS(0): Stack is too empty to read value")
+    };
     // execute POP
     let popped_val = read_operand(wsize, rm_MEM(RSP));
-    let wsize_bytes = wsize / 8;
     RSP = add_bits(RSP, get_slice_int(64, wsize_bytes, 0));
     write_operand(wsize, dest, popped_val);
 }
@@ -235,7 +244,12 @@ function clause execute(IMUL(wsize, dest, src)) = {
 function clause execute(CALL(rel32)) = {
     /* execute near relative call */
     let displacement = read_operand(64, IMM32(rel32));
-    // push current RIP to the stack
+    // fail with a stack fault if stack is not large enough for an 8-byte return address
+    if unsigned(RSP) < 8 then {
+        fail("Stack Fault #SS(0): Stack has fewer than 8 bytes of space left")
+    };
+    // push current RIP to the stack (and change stack pointer (RSP) accordingly)
+    RSP = sub_bits(RSP, sail_zero_extend(0x8, 64));
     let dest_address = rm_MEM(RSP);
     write_operand(64, dest_address, RIP);
     // change RIP as specified by the instruction
@@ -246,15 +260,21 @@ function clause execute(LEAVE()) = {
     /* copy frame pointer (RBP) into the stack pointer register (RSP)
     to release the stack space allocated to the topmost stack frame */
     RSP = RBP;
-    /* pop from the top of the stack (RSP) into RBP
-    RBP now contains the old / now current base / frame pointer
-    */
+    // fail with a stack fault if the stack is too empty to contain a base / frame pointer
+    if unsigned(RSP) > 2^64 - 8 then {
+        fail("Stack Fault #SS(0): Stack has fewer than 8 bytes of filled space")
+    };
+    // pop from the top of the stack (RSP) into RBP
     RBP = read_operand(64, rm_MEM(RSP));
     RSP = RSP + 8;
 }
 
 function clause execute(RET()) = {
     /* execute near return */
+    // fail with a stack fault if the stack is too empty to contain an instruction pointer
+    if unsigned(RSP) > 2^64 - 8 then {
+        fail("Stack Fault #SS(0): Stack has fewer than 8 bytes of filled space")
+    };
     // pop from the top of the stack (RSP) into RIP
     RIP = read_operand(64, rm_MEM(RSP));
     RSP = RSP + 8;

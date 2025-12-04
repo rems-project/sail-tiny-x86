@@ -1,17 +1,17 @@
 union ast = {
     // if one of the types is a tuple with first element word_size, the tuple represents (word_size, dest, src), unless the instruction is CMP
-    // only implementing instructions where both dest and src have the same word size, or where src can be sign-extended to the target word size
+    // only implementing instructions where both dest and src have the same word size
     MOV: (word_size, rm_operand, rmi_operand),
     XOR: (word_size, rm_operand, rmi_operand),
     SFENCE: unit,
     LFENCE: unit,
     MFENCE: unit,
     CMP: (word_size, rm_operand, rmi_operand),
-    PUSH: (word_size, rmi_operand), // only allowing 64 bit operand
+    PUSH: (word_size, rmi_operand),
     POP: (word_size, rm_operand),
     ADD: (word_size, rm_operand, rmi_operand),
     SUB: (word_size, rm_operand, rmi_operand),
-    IMUL: (word_size, reg_ref, rm_operand), // IMUL with only 2 arguments (dest and src)
+    IMUL: (word_size, reg_index, rm_operand), // IMUL with only 2 arguments (dest and src)
     CALL: imm32,
     LEAVE: unit,
     RET: unit, // near return only

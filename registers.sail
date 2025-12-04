@@ -46,26 +46,27 @@ let GPRs : vector(16, register(bits(64))) = [
 
 /* register RFLAGS, system and status flags + mostly restricted access */
 bitfield rflags : bits(64) = {
-    // status flags (exclusing AF as it is only used for legacy instructions)
+    // status flags
     OF: 11, // overflow flag (for operations between signed values)
     SF: 7, // sign flag
     ZF: 6, // zero flag
+    AF: 4, // auxiliary carry flag
     PF: 2, // parity flag
     CF: 0 // carry flag (for operations between unsigned values)
 }
 register RFLAGS: rflags
 
 /* read and write least-significant 8,16,32,64 (32 with 0 extend for write) bits */
- val read_reg: forall 'm, 'm in {8, 16, 32, 64}. (int('m), reg_index) -> bits('m)
+ val read_GPR: forall 'm, 'm in {8, 16, 32, 64}. (int('m), reg_index) -> bits('m)
 
- function read_reg(wsize, i: reg_index) = {
+ function read_GPR(wsize, i: reg_index) = {
     let reg = *GPRs[i];
     reg[wsize - 1 .. 0]
 }
 
-val write_reg: forall 'm, 'm in {8, 16, 32, 64}. (int('m), reg_index, bits('m)) -> unit
+val write_GPR: forall 'm, 'm in {8, 16, 32, 64}. (int('m), reg_index, bits('m)) -> unit
 
-function write_reg(wsize, i: reg_index, value) = {
+function write_GPR(wsize, i: reg_index, value) = {
     if wsize == 32 then {
         // if writing 32 bits to a register, the value to be written is zero-extended to 64 bits
         (*GPRs[i])[63 .. 32] = 0x0000_0000;

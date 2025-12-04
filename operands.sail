@@ -59,7 +59,7 @@ function read_rm_operand(wsize, operand: rm_operand) = {
     let wsize_bytes = wsize / 8;
     assert('m == wsize_bytes * 8); // required for type-checking
     match operand {
-        rm_REG(reg_index) => read_reg(wsize, reg_index),
+        rm_REG(reg_index) => read_GPR(wsize, reg_index),
         rm_MEM(mem_addr) => read_memory(wsize_bytes, mem_addr, create_readAccessDescriptor()),
     }
 }
@@ -71,13 +71,13 @@ function read_rmi_operand(wsize, operand: rmi_operand) = {
     assert('m == wsize_bytes * 8); // required for type-checking
     match operand {
         rmi_IMM(imm) => read_imm(wsize, imm),
-        rmi_REG(reg_index) => read_reg(wsize, reg_index),
+        rmi_REG(reg_index) => read_GPR(wsize, reg_index),
         rmi_MEM(mem_addr) => read_memory(wsize_bytes, mem_addr, create_readAccessDescriptor()),
     }
 }
 
 /* overloaded function to read any operand type present in the ast */
-overload read_operand = {read_rm_operand, read_rmi_operand, read_imm, read_reg}
+overload read_operand = {read_rm_operand, read_rmi_operand, read_imm, read_GPR}
 
 /* write to reg or mem location */
 val write_rm_operand: forall 'm, 'm in {8, 16, 32, 64}. (int('m), rm_operand, bits('m)) -> unit
@@ -85,10 +85,10 @@ function write_rm_operand(wsize, operand: rm_operand, value) = {
     let wsize_bytes = wsize / 8;
     assert('m == wsize_bytes * 8); // required for type-checking
     match operand {
-        rm_REG(reg_index) => write_reg(wsize, reg_index, value),
+        rm_REG(reg_index) => write_GPR(wsize, reg_index, value),
         rm_MEM(mem_addr) => write_memory(wsize_bytes, mem_addr, value, create_writeAccessDescriptor()),
     }
 }
 
 /* overloaded function to write to any register or memory type */
-overload write_operand = {write_rm_operand, write_reg}
+overload write_operand = {write_rm_operand, write_GPR}

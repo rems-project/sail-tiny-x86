@@ -1,13 +1,13 @@
 union ast = {
     // if one of the types is a tuple with first element word_size, the tuple represents (word_size, dest, src), unless the instruction is CMP
-    // only implementing instructions where both dest and src have the same word size
+    // only implementing instructions where both dest and src have the same word size, or where src can be sign-extended to the target word size
     MOV: (word_size, rm_operand, rmi_operand),
     XOR: (word_size, rm_operand, rmi_operand),
     SFENCE: unit,
     LFENCE: unit,
     MFENCE: unit,
     CMP: (word_size, rm_operand, rmi_operand),
-    PUSH: (word_size, rmi_operand),
+    PUSH: (word_size, rmi_operand), // only allowing 64 bit operand
     POP: (word_size, rm_operand),
     ADD: (word_size, rm_operand, rmi_operand),
     SUB: (word_size, rm_operand, rmi_operand),
@@ -111,6 +111,8 @@ function clause execute(CMP(wsize, first, second)) = {
     RFLAGS[CF] = if unsigned(first_val) < unsigned(second_val) then 0b1 else 0b0;
     // set zero flag if result = 0, else clear zero flag
     RFLAGS[ZF] = if result == sail_zero_extend(0x0, wsize) then 0b1 else 0b0;
+    // Set aux carry flag if an arithmetic operation generates a borrow out of bit 3 (i.e. least significant 4 bits) of the result; cleared otherwise
+    RFLAGS[AF] = if unsigned(first_val[3 .. 0]) < unsigned(second_val[3 .. 0]) then 0b1 else 0b0;
     // set parity flag if least significant byte of result contains an even number of 1 bits, else clear
     modify_parity_flag(result);
 }
@@ -171,6 +173,8 @@ function clause execute(ADD(wsize, dest, src)) = {
     RFLAGS[CF] = if unsigned(result) < unsigned(dest_val) | unsigned(result) < unsigned(src_val) then 0b1 else 0b0;
     // set zero flag if result = 0, else clear zero flag
     RFLAGS[ZF] = if result == sail_zero_extend(0x0, wsize) then 0b1 else 0b0;
+    // Set aux carry flag if an arithmetic operation generates a carry out of bit 3 (i.e. least significant 4 bits) of the result; cleared otherwise
+    RFLAGS[AF] = if unsigned(dest_val[3 .. 0]) + unsigned(src_val[3 .. 0]) >= 16 then 0b1 else 0b0;
     // set parity flag if least significant byte of result contains an even number of 1 bits, else clear
     modify_parity_flag(result);
 }
@@ -199,6 +203,8 @@ function clause execute(SUB(wsize, dest, src)) = {
     RFLAGS[CF] = if unsigned(dest_val) < unsigned(src_val) then 0b1 else 0b0;
     // set zero flag if result = 0, else clear zero flag
     RFLAGS[ZF] = if result == sail_zero_extend(0x0, wsize) then 0b1 else 0b0;
+    // Set aux carry flag if an arithmetic operation generates a borrow out of bit 3 (i.e. least significant 4 bits) of the result; cleared otherwise
+    RFLAGS[AF] = if unsigned(dest_val[3 .. 0]) < unsigned(src_val[3 .. 0]) then 0b1 else 0b0;
     // set parity flag if least significant byte of result contains an even number of 1 bits, else clear
     modify_parity_flag(result);
 }

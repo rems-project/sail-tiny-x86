@@ -16,13 +16,13 @@ union imm = {
 /* union types for operand */
 // register or memory operand
 union rm_operand = {
-    rm_REG: reg_ref,
+    rm_REG: reg_index,
     rm_MEM: mem_addr
 }
 // register, memory, or immediate operand
 union rmi_operand = {
     rmi_IMM: imm,
-    rmi_REG: reg_ref,
+    rmi_REG: reg_index,
     rmi_MEM: mem_addr
 }
 
@@ -59,7 +59,7 @@ function read_rm_operand(wsize, operand: rm_operand) = {
     let wsize_bytes = wsize / 8;
     assert('m == wsize_bytes * 8); // required for type-checking
     match operand {
-        rm_REG(reg_ref) => read_reg(wsize, reg_ref),
+        rm_REG(reg_index) => read_reg(wsize, reg_index),
         rm_MEM(mem_addr) => read_memory(wsize_bytes, mem_addr, create_readAccessDescriptor()),
     }
 }
@@ -71,7 +71,7 @@ function read_rmi_operand(wsize, operand: rmi_operand) = {
     assert('m == wsize_bytes * 8); // required for type-checking
     match operand {
         rmi_IMM(imm) => read_imm(wsize, imm),
-        rmi_REG(reg_ref) => read_reg(wsize, reg_ref),
+        rmi_REG(reg_index) => read_reg(wsize, reg_index),
         rmi_MEM(mem_addr) => read_memory(wsize_bytes, mem_addr, create_readAccessDescriptor()),
     }
 }
@@ -85,7 +85,7 @@ function write_rm_operand(wsize, operand: rm_operand, value) = {
     let wsize_bytes = wsize / 8;
     assert('m == wsize_bytes * 8); // required for type-checking
     match operand {
-        rm_REG(reg_ref) => write_reg(wsize, reg_ref, value),
+        rm_REG(reg_index) => write_reg(wsize, reg_index, value),
         rm_MEM(mem_addr) => write_memory(wsize_bytes, mem_addr, value, create_writeAccessDescriptor()),
     }
 }

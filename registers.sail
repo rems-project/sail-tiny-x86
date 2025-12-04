@@ -27,11 +27,10 @@ register R15: bits(64)
 
 /* register RFLAGS, system and status flags + mostly restricted access */
 bitfield rflags : bits(64) = {
-    // status flags
+    // status flags (exclusing AF as it is only used for legacy instructions)
     OF: 11, // overflow flag (for operations between signed values)
     SF: 7, // sign flag
     ZF: 6, // zero flag
-    AF: 4, // auxiliary carry flag
     PF: 2, // parity flag
     CF: 0 // carry flag (for operations between unsigned values)
 }

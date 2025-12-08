@@ -29,10 +29,15 @@ union rmi_operand = {
 /* permitted word sizes */
 type word_size = {8,16,32,64}
 
-/* read immediate value from variable bit-extended to 64 bits */
-val read_imm: forall 'm, 'm in {8, 16, 32, 64}. (int('m), imm) -> bits('m)
+/* instruction prefixes */
+struct prefix('wsize) = {
+    lock: bool,
+    wsize: int('wsize)
+}
+
+/* read immediate value from operand */
+val read_imm: forall 'wsize, 'wsize in {8, 16, 32, 64}. (int('wsize), imm) -> bits('wsize)
 function read_imm(wsize, imm) = {
-    // If imm size is smaller than word size, then sign-extend the imm before returning it
     match imm {
         IMM8(value) => {
             assert(wsize == 8, "Immediate value size is 8 bits, but word size is not.");
@@ -43,6 +48,7 @@ function read_imm(wsize, imm) = {
             value[15 .. 0]
         },
         IMM32(value) => {
+            // If imm size is smaller than word size, then sign-extend the imm before returning it
             assert(wsize >= 32, "Immediate value size is 32 bits, but word size is not 32 or 64 bits.");
             sail_sign_extend(value[31 .. 0], wsize)
         },
@@ -54,41 +60,50 @@ function read_imm(wsize, imm) = {
 }
 
 /* read register or memory operand */
-val read_rm_operand: forall 'm, 'm in {8, 16, 32, 64}. (int('m), rm_operand) -> bits('m)
-function read_rm_operand(wsize, operand: rm_operand) = {
-    let wsize_bytes = wsize / 8;
-    assert('m == wsize_bytes * 8); // required for type-checking
+val read_rm_operand: forall 'wsize, 'wsize in {8, 16, 32, 64}. (prefix('wsize), rm_operand) -> bits('wsize)
+function read_rm_operand(prefix, operand) = {
     match operand {
-        rm_REG(reg_index) => read_GPR(wsize, reg_index),
-        rm_MEM(mem_addr) => read_memory(wsize_bytes, mem_addr, create_readAccessDescriptor()),
+        rm_REG(reg_index) => read_GPR(prefix.wsize, reg_index),
+        rm_MEM(mem_addr) => {
+            let acc_desc = if prefix.lock then create_atomicReadAccessDescriptor() else create_readAccessDescriptor();
+            let wsize_bytes = prefix.wsize / 8;
+            assert(prefix.wsize == wsize_bytes * 8); // required for type-checking
+            read_memory(wsize_bytes, mem_addr, acc_desc)
+        },
     }
 }
 
 /* read register / memory / immediate operand */
-val read_rmi_operand: forall 'm, 'm in {8, 16, 32, 64}. (int('m), rmi_operand) -> bits('m)
-function read_rmi_operand(wsize, operand: rmi_operand) = {
-    let wsize_bytes = wsize / 8;
-    assert('m == wsize_bytes * 8); // required for type-checking
+val read_rmi_operand: forall 'wsize, 'wsize in {8, 16, 32, 64}. (prefix('wsize), rmi_operand) -> bits('wsize)
+function read_rmi_operand(prefix, operand) = {
     match operand {
-        rmi_IMM(imm) => read_imm(wsize, imm),
-        rmi_REG(reg_index) => read_GPR(wsize, reg_index),
-        rmi_MEM(mem_addr) => read_memory(wsize_bytes, mem_addr, create_readAccessDescriptor()),
+        rmi_IMM(imm) => read_imm(prefix.wsize, imm),
+        rmi_REG(reg_index) => read_GPR(prefix.wsize, reg_index),
+        rmi_MEM(mem_addr) => {
+            let acc_desc = if prefix.lock then create_atomicReadAccessDescriptor() else create_readAccessDescriptor();
+            let wsize_bytes = prefix.wsize / 8;
+            assert(prefix.wsize == wsize_bytes * 8); // required for type-checking
+            read_memory(wsize_bytes, mem_addr, acc_desc)
+        },
     }
 }
 
 /* overloaded function to read any operand type present in the ast */
-overload read_operand = {read_rm_operand, read_rmi_operand, read_imm, read_GPR}
+overload read_operand = {read_rm_operand, read_rmi_operand}
 
 /* write to reg or mem location */
-val write_rm_operand: forall 'm, 'm in {8, 16, 32, 64}. (int('m), rm_operand, bits('m)) -> unit
-function write_rm_operand(wsize, operand: rm_operand, value) = {
-    let wsize_bytes = wsize / 8;
-    assert('m == wsize_bytes * 8); // required for type-checking
+val write_rm_operand: forall 'wsize, 'wsize in {8, 16, 32, 64}. (prefix('wsize), rm_operand, bits('wsize)) -> unit
+function write_rm_operand(prefix, operand, value) = {
     match operand {
-        rm_REG(reg_index) => write_GPR(wsize, reg_index, value),
-        rm_MEM(mem_addr) => write_memory(wsize_bytes, mem_addr, value, create_writeAccessDescriptor()),
+        rm_REG(reg_index) => write_GPR(prefix.wsize, reg_index, value),
+        rm_MEM(mem_addr) => {
+            let acc_desc = if prefix.lock then create_atomicWriteAccessDescriptor() else create_writeAccessDescriptor();
+            let wsize_bytes = prefix.wsize / 8;
+            assert(prefix.wsize == wsize_bytes * 8); // required for type-checking
+            write_memory(wsize_bytes, mem_addr, value, acc_desc)
+        },
     }
 }
 
 /* overloaded function to write to any register or memory type */
-overload write_operand = {write_rm_operand, write_GPR}
+overload write_operand = {write_rm_operand}

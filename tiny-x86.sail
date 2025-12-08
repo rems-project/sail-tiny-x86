@@ -18,7 +18,8 @@ union ast('wsize) = {
     LEAVE: unit,
     RET: unit, // near return only
     JMP: imm8, // jump short only
-    JNS: imm8 // jump short if not sign only
+    JNS: imm8, // jump short if not sign only
+    HLT: unit
 }
 
 type default_ast = ast(64)
@@ -332,5 +333,7 @@ function clause execute(JNS(rel8)) = {
         RIP = RIP + displacement;
     }
 }
+
+function clause execute(HLT()) = ()
 
 end execute

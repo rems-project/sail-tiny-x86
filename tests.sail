@@ -116,7 +116,7 @@ function jmp() -> unit = {
   assert(RIP == add_bits(current_RIP, sail_sign_extend(0xFF, 64)), "JMP does not perform a correct jump");
 }
 
-function main() : unit -> unit = {
+function test_execute() -> unit = {
   write_then_read_mem();
   mov_reg_to_mem();
   xor_2_numbers();
@@ -127,4 +127,14 @@ function main() : unit -> unit = {
   multiply_2_numbers();
   call_leave_ret();
   jmp();
+}
+
+function test_decode() -> unit = {
+  write_memory(2, RIP, 0x89E5, create_writeAccessDescriptor()); // we prob actually need to write instructions byte by byte
+  print_bits("", read_memory(1, RIP, create_readAccessDescriptor()));
+}
+
+function main() : unit -> unit = {
+  test_execute();
+  test_decode();
 }

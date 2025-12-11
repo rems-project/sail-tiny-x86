@@ -1,30 +1,3 @@
-union ast = {
-    // Structure of all possible executable instructions
-    // if a type contains 2 operands, the first operand is dest and the second is src, unless the instruction is CMP
-    MOV: (word_size, rm_operand, rmi_operand),
-    XOR: (bool, word_size, rm_operand, rmi_operand),
-    SFENCE: unit,
-    LFENCE: unit,
-    MFENCE: unit,
-    CMP: (word_size, rm_operand, rmi_operand),
-    PUSH: (word_size, rmi_operand), // only allowing 64 bit operand
-    POP: (word_size, rm_operand),
-    ADD: (bool, word_size, rm_operand, rmi_operand),
-    SUB: (bool, word_size, rm_operand, rmi_operand),
-    IMUL: (word_size, reg_index, rm_operand), // IMUL with only 2 arguments (dest and src)
-    CALL: imm32,
-    LEAVE: unit,
-    RET: unit, // near return only
-    JMP: imm8, // jump short only
-    JNS: imm8 // jump short if not sign only
-}
-
-type default_ast = ast(64)
-
-/*------------------------------------------------------------------------------
- * EXECUTE
- *-----------------------------------------------------------------------------*/
-
 val fail_if_two_mem_operands : (rm_operand, rmi_operand, string) -> unit
 function fail_if_two_mem_operands(dest, src, operation) = {
     let error_message = concat_str(operation, " operation cannot occur between 2 memory locations");
@@ -36,6 +9,8 @@ function fail_if_two_mem_operands(dest, src, operation) = {
 
 val execute : ast -> unit
 scattered function execute
+
+/* MOV */
 
 function clause execute(MOV(wsize, dest, src)) = {
     // MOV cannot occur between dest = memory location and src = memory location
@@ -49,6 +24,18 @@ function clause execute(MOV(wsize, dest, src)) = {
     // execute MOV instruction
     let val_to_write = read_operand(false, wsize, src);
     write_operand(false, wsize, dest, val_to_write)
+}
+
+// Decode MOV r/m32, r32
+function clause decode_one_byte_instruction(0x89, instruction_ptr, read_offset, decoded_prefixes) = {
+    if decoded_prefixes.op_size_override == false & decoded_prefixes.REX[W] == 0b0 & decoded_prefixes.REX[R] == 0b0 then {
+        // opcode is for MOV r/m32, r32
+        // addressing method + operand type: Ev, Gv --> (E, size, G, size)
+        let (new_read_offset, operand1, operand2) = 
+            decode_2_rm_operands(instruction_ptr, read_offset, addressingMethod_E, 32, addressingMethod_G, 32);
+        Some(new_read_offset, MOV(32, operand1, operand2))
+    }
+    else None()
 }
 
 function clause execute(XOR(lock, wsize, dest, src)) = {
@@ -301,139 +288,3 @@ function clause execute(JNS(rel8)) = {
 }
 
 end execute
-
-/*------------------------------------------------------------------------------
- * DECODE
- *-----------------------------------------------------------------------------*/
-
-/* decode prefixes */
-
-// bitfield to easily access fields within the REX prefix
-bitfield REX: bits(8) = {
-    W: 3,
-    R: 2,
-    X: 1,
-    B: 0
-}
-
-// struct to store the implications of the decoded prefixes
-struct decodedPrefixes = {
-    lock: bool, // encoding is F0 (hex)
-    op_size_override: bool, // encoding is 66 (hex)
-    addr_size_override: bool, // encoding is 67 (hex)
-    mandatory_prefix_66H: bool, // encoding is 66 (hex) + must occur right before opcode or REX prefix
-    REX: REX // encoding is 0100WRXB (binary) + must occur right before opcode
-}
-
-// resets a prefix implication if the corresponding prefix had to be at the end for the implication to hold
-// REX prefix is only used if it is the last prefix to occur
-// 66H is only counted as a mandatory prefix if it is the last prefix (other than REX) to occur
-val reset_prefixes_not_at_end: decodedPrefixes -> decodedPrefixes
-function reset_prefixes_not_at_end(decodedPrefixes) = {
-    {decodedPrefixes with mandatory_prefix_66H = false, REX = struct {bits = 0x00}}
-}
-
-// function to decode prefixes and return their implications
-val decode_prefix_inner: (bits(64), int, decodedPrefixes, bits(8)) -> (int, decodedPrefixes)
-function decode_prefix_inner(instruction_ptr, read_offset, decoded_prefixes, prev_prefix) = {
-    // read next potential prefix
-    let next_prefix: bits(8) = read_memory(1, instruction_ptr + read_offset, create_iFetchAccessDescriptor());
-
-    // if we have a lock prefix
-    if next_prefix == 0xF0 then {
-        // (reset placement-dependent prefixes)
-        let reset_decoded_prefixes = reset_prefixes_not_at_end(decoded_prefixes) in
-        // set lock to true
-        let new_decoded_prefixes = {reset_decoded_prefixes with lock = true} in
-        // check for more prefixes
-            decode_prefix_inner(instruction_ptr, read_offset + 1, new_decoded_prefixes, next_prefix)
-    }
-    // if we have a operand size override (to 16 bits) / potential mandatory prefix, 
-    else if next_prefix == 0x66 then {
-        // (reset placement-dependent prefixes)
-        let reset_decoded_prefixes = reset_prefixes_not_at_end(decoded_prefixes) in
-        // set the corresponding fields to true
-        let new_decoded_prefixes = {reset_decoded_prefixes with op_size_override = true, mandatory_prefix_66H = true} in
-        // check for more prefixes
-            decode_prefix_inner(instruction_ptr, read_offset + 1, new_decoded_prefixes, next_prefix)
-    }
-    // if we have a address size override (to 16 bits) prefix
-    else if next_prefix == 0x67 then {
-        // (reset placement-dependent prefixes)
-        let reset_decoded_prefixes = reset_prefixes_not_at_end(decoded_prefixes) in
-        // set addr_size_override to true
-        let new_decoded_prefixes = {reset_decoded_prefixes with addr_size_override = true} in
-        // heck for more prefixes
-            decode_prefix_inner(instruction_ptr, read_offset + 1, new_decoded_prefixes, next_prefix)
-    }
-    // if we have a REX prefix
-    else if next_prefix[7 .. 4] == 0x4 then {
-        // (reset placement-dependent prefixes if necessary)
-        let reset_decoded_prefixes = (if prev_prefix == 0x66 then decoded_prefixes else reset_prefixes_not_at_end(decoded_prefixes)) in
-        // set the REX field according to the prefix's value
-        let rex_contents: REX = struct{bits = next_prefix} in
-        let new_decoded_prefixes = {reset_decoded_prefixes with REX = rex_contents} in
-        // check for more prefixes
-            decode_prefix_inner(instruction_ptr, read_offset + 1, new_decoded_prefixes, next_prefix)
-    }
-    else {
-        // return the result of decoding all the prefixes, as there are no more potential prefixes to check
-        (read_offset, decoded_prefixes)
-    }
-}
-
-// wrapper function to decode the prefixes of an instruction
-val decode_prefix: (bits(64), decodedPrefixes) -> (int, decodedPrefixes)
-function decode_prefix(instruction_ptr, decoded_prefixes) = {
-    decode_prefix_inner(instruction_ptr, 0, decoded_prefixes, 0x00)
-}
-
-struct optionalInstructionParts = {
-    modRM_byte: bool, // existence depends on opcode's corresponding addressing method
-    SIB_byte: bool, // existence depends on contents of the ModR/M byte. If no ModR/M byte, this doesn't exist.
-    displacement_bytes: {0,1,2,4,8}, // existence and size depends on contents of the ModR/M byte. If no ModR/M byte, this doesn't exist.
-    immediate_bytes: {0,1,2,4,8} // existence depends on the opcode, size depends on opcode or prefix
-}
-
-// function to decode the instruction opcode
-// returns the new read offset, an incomplete AST entry, and a struct of optional instruction parts we now know to exist
-val decode_opcode: forall 'wsize, 'wsize in {8, 16, 32, 64}. (bits(64), int, decodedPrefixes) -> (int, ast('wsize))
-function decode_opcode(instruction_ptr, read_offset, decoded_prefixes) = {
-    let execute_prefix = struct {lock = false, wsize = 32};
-    // try one byte, then two byte, then three byte opcode
-    // try one byte decode
-    let one_byte_opcode = read_memory(1, instruction_ptr + read_offset, create_iFetchAccessDescriptor());
-    match one_byte_opcode {
-        // mov is 88*, 89, 8A*, 8B, B0*, B8, C6*, C7 - * is 8 bit operand size only, not * is all others
-        0x88 -> { // MOV r/m8, r8
-            let prefix = {execute_prefix with wsize = 8} in
-            let instruction = MOV(prefix, /* reg or mem */, /* reg */ ) 
-            // perform other stages of instruction decode by function calling here, to fill the gaps
-            // could inline match cases with corresponding executes to make layout nicer e.g. function match_to_mov
-        }
-    }
-}
-
-val decode: forall 'wsize, 'wsize in {8, 16, 32, 64}. bits(64) -> ast('wsize)
-function decode(instruction_ptr) = {
-    var read_offset: int = 0;
-    var decoded_prefixes: decodedPrefixes = struct { 
-        lock = false, 
-        op_size_override = false, 
-        addr_size_override = false,
-        mandatory_prefix_66H = false,
-        REX = struct {bits = 0x00}
-    };
-
-    /* decode prefix */
-    (read_offset, decoded_prefixes) = decode_prefix(instruction_ptr, decoded_prefixes);
-
-    // TODO: decode opcode next
-}
-
-/*
-decode -> decode_prefix + decode_instruction*
-decode_instruction -> decodes opcode + decode_operands*
-decode_operands -> decode_non_immediate* (if opcode says modr/m exists) + decode_immediate
-decode_non_immediate -> decode modr/m byte + decode sib byte (if modr/m says it exists) + decode displacement (if modr/, says it exists)
-*/

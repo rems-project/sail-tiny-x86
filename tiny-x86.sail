@@ -26,16 +26,45 @@ function clause execute(MOV(wsize, dest, src)) = {
     write_operand(false, wsize, dest, val_to_write)
 }
 
+// get operands for MOV instruction
+// TODO: tbh this will work for any instructions with 2 operands and code v. Rename and move it away!
+val get_operands_for_mov: (bits(64), int, addressingMethod, addressingMethod, decodedPrefixes) -> (int, rm_operand, rmi_operand)
+function get_operands_for_mov(instruction_ptr, read_offset, operand1_addr_method, operand2_addr_method, decoded_prefixes) = {
+    // the operand code is v, so wsize is determined by the operand size
+    // TODO: For now, ignore prefix decoded_prefixes.REX[R] == 0b0 (determines whether registers 8-15 can be accessed or not)
+    let wsize = {
+        if decoded_prefixes.op_size_override == true then 16
+        else if decoded_prefixes.REX[W] == 0b1 then 64
+        else 32
+    };
+    // use decode operand types (containing addressing mode and word size) to decode operands
+    let operand1_type: decodeOperandType = struct {
+        addressing_method = operand1_addr_method,
+        wsize = wsize
+    };
+    let operand2_type: decodeOperandType = struct {
+        addressing_method = operand2_addr_method,
+        wsize = wsize
+    };
+    let (new_read_offset, operand1, operand2) = 
+        decode_2_rm_operands(instruction_ptr, read_offset, operand1_type, operand2_type);
+    (new_read_offset, operand1, operand2)
+}
+
 // Decode MOV r/m32, r32
 function clause decode_one_byte_instruction(0x89, instruction_ptr, read_offset, decoded_prefixes) = {
-    if decoded_prefixes.op_size_override == false & decoded_prefixes.REX[W] == 0b0 & decoded_prefixes.REX[R] == 0b0 then {
-        // opcode is for MOV r/m32, r32
-        // addressing method + operand type: Ev, Gv --> (E, size, G, size)
-        let (new_read_offset, operand1, operand2) = 
-            decode_2_rm_operands(instruction_ptr, read_offset, addressingMethod_E, 32, addressingMethod_G, 32);
-        Some(new_read_offset, MOV(32, operand1, operand2))
-    }
-    else None()
+    // addressing method + operand code: Ev, Gv
+    let (new_read_offset, operand1, operand2) = 
+        get_operands_for_mov(instruction_ptr, read_offset, addressingMethod_E, addressingMethod_G, decoded_prefixes);
+    Some(new_read_offset, MOV(32, operand1, operand2)) // TODO: wait maybe move wsize bit here. Could make a fn to calculate wsize
+}
+
+// Decode MOV r32, r/m32
+function clause decode_one_byte_instruction(0x8B, instruction_ptr, read_offset, decoded_prefixes) = {
+    // addressing method + operand code: Gv, Ev
+    let (new_read_offset, operand1, operand2) = 
+        get_operands_for_mov(instruction_ptr, read_offset, addressingMethod_G, addressingMethod_E, decoded_prefixes);
+    Some(new_read_offset, MOV(32, operand1, operand2))
 }
 
 function clause execute(XOR(lock, wsize, dest, src)) = {

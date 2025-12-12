@@ -221,10 +221,13 @@ function clause decode_rm_operand(addressingMethod_E, instruction_ptr, read_offs
         // the mod and r/m bits are used to specify a memory location
         var new_read_offset: int = read_offset;
         var working_val = {
-            if reg_used == 4 then {
-                // decode SIB byte
+            // get original 3-bit register location stored in the mod r/m byte
+            let three_bit_reg_used = mod(reg_used, 8) in
+            if three_bit_reg_used == 4 then { 
+                // this register value means that we need to decode the SIB byte
                 let sib_value = 
                 let sib_byte: SIBByte = struct {
+                    // read SIB byte
                     bits = read_memory(1, instruction_ptr + new_read_offset, create_iFetchAccessDescriptor())
                 } in
                 decode_sib_byte(sib_byte, wsize, REX);

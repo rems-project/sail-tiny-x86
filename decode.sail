@@ -221,7 +221,7 @@ function clause decode_rm_operand(addressingMethod_E, instruction_ptr, read_offs
         // the mod and r/m bits are used to specify a memory location
         var new_read_offset: int = read_offset;
         var working_val = {
-            if reg_used == 4 then {
+            if mod(reg_used, 8) == 4 then { // getting rid of top bit for this comparison as the top bit is added by the REX prefix
                 // decode SIB byte
                 let sib_value = 
                 let sib_byte: SIBByte = struct {

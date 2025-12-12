@@ -26,16 +26,20 @@ function clause execute(MOV(wsize, dest, src)) = {
     write_operand(false, wsize, dest, val_to_write)
 }
 
-// Decode MOV r/m32, r32
+// Decode MOV r/m{32, 64}, r{32, 64}
 function clause decode_one_byte_instruction(0x89, instruction_ptr, read_offset, decoded_prefixes) = {
-    if decoded_prefixes.op_size_override == false & decoded_prefixes.REX[W] == 0b0 & decoded_prefixes.REX[R] == 0b0 then {
-        // opcode is for MOV r/m32, r32
-        // addressing method + operand type: Ev, Gv --> (E, size, G, size)
-        let (new_read_offset, operand1, operand2) = 
-            decode_2_rm_operands(instruction_ptr, read_offset, addressingMethod_E, 32, addressingMethod_G, 32);
-        Some(new_read_offset, MOV(32, operand1, operand2))
-    }
-    else None()
+    // addressing method + operand type: Ev, Gv
+    let (new_read_offset, wsize, operand1, operand2) = 
+        get_2_type_v_operands(instruction_ptr, read_offset, addressingMethod_E, addressingMethod_G, decoded_prefixes);
+    Some(new_read_offset, MOV(wsize, operand1, operand2))
+}
+
+// Decode MOV r{32, 64}, r/m{32, 64}
+function clause decode_one_byte_instruction(0x8B, instruction_ptr, read_offset, decoded_prefixes) = {
+    // addressing method + operand type: Gv, Ev
+    let (new_read_offset, wsize, operand1, operand2) = 
+        get_2_type_v_operands(instruction_ptr, read_offset, addressingMethod_G, addressingMethod_E, decoded_prefixes);
+    Some(new_read_offset, MOV(wsize, operand1, operand2))
 }
 
 function clause execute(XOR(lock, wsize, dest, src)) = {

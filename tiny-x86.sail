@@ -1,24 +1,3 @@
-union ast = {
-    // Structure of all possible executable instructions
-    // if a type contains 2 operands, the first operand is dest and the second is src, unless the instruction is CMP
-    MOV: (word_size, rm_operand, rmi_operand),
-    XOR: (bool, word_size, rm_operand, rmi_operand),
-    SFENCE: unit,
-    LFENCE: unit,
-    MFENCE: unit,
-    CMP: (word_size, rm_operand, rmi_operand),
-    PUSH: (word_size, rmi_operand), // only allowing 64 bit operand
-    POP: (word_size, rm_operand),
-    ADD: (bool, word_size, rm_operand, rmi_operand),
-    SUB: (bool, word_size, rm_operand, rmi_operand),
-    IMUL: (word_size, reg_index, rm_operand), // IMUL with only 2 arguments (dest and src)
-    CALL: imm32,
-    LEAVE: unit,
-    RET: unit, // near return only
-    JMP: imm8, // jump short only
-    JNS: imm8 // jump short if not sign only
-}
-
 val fail_if_two_mem_operands : (rm_operand, rmi_operand, string) -> unit
 function fail_if_two_mem_operands(dest, src, operation) = {
     let error_message = concat_str(operation, " operation cannot occur between 2 memory locations");
@@ -30,6 +9,8 @@ function fail_if_two_mem_operands(dest, src, operation) = {
 
 val execute : ast -> unit
 scattered function execute
+
+/* MOV */
 
 function clause execute(MOV(wsize, dest, src)) = {
     // MOV cannot occur between dest = memory location and src = memory location
@@ -43,6 +24,18 @@ function clause execute(MOV(wsize, dest, src)) = {
     // execute MOV instruction
     let val_to_write = read_operand(false, wsize, src);
     write_operand(false, wsize, dest, val_to_write)
+}
+
+// Decode MOV r/m32, r32
+function clause decode_one_byte_instruction(0x89, instruction_ptr, read_offset, decoded_prefixes) = {
+    if decoded_prefixes.op_size_override == false & decoded_prefixes.REX[W] == 0b0 & decoded_prefixes.REX[R] == 0b0 then {
+        // opcode is for MOV r/m32, r32
+        // addressing method + operand type: Ev, Gv --> (E, size, G, size)
+        let (new_read_offset, operand1, operand2) = 
+            decode_2_rm_operands(instruction_ptr, read_offset, addressingMethod_E, 32, addressingMethod_G, 32);
+        Some(new_read_offset, MOV(32, operand1, operand2))
+    }
+    else None()
 }
 
 function clause execute(XOR(lock, wsize, dest, src)) = {

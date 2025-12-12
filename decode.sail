@@ -56,6 +56,11 @@ enum addressingMethod = {
     addressingMethod_G
 }
 
+struct decodeOperandType = {
+    addressing_method: addressingMethod,
+    wsize: word_size
+}
+
 /*------------------------------------------------------------------------------
  * DECODE Functions
  *-----------------------------------------------------------------------------*/
@@ -135,7 +140,13 @@ function decode_prefix_inner(instruction_ptr, read_offset, decoded_prefixes, pre
 // wrapper function to decode the prefixes of an instruction
 val decode_prefix: (bits(64), decodedPrefixes) -> (int, decodedPrefixes)
 function decode_prefix(instruction_ptr, decoded_prefixes) = {
-    decode_prefix_inner(instruction_ptr, 0, decoded_prefixes, 0x00)
+    let (read_offset, decoded_prefixes) = decode_prefix_inner(instruction_ptr, 0, decoded_prefixes, 0x00);
+    if decoded_prefixes.REX[W] == 0b1 then {
+        // If the REX prefix was the last prefix before the opcode (i.e. REX is not ignored / reset), and REX[W] is set
+        // then the op_size_override prefix is ignored / reset
+        (read_offset, {decoded_prefixes with op_size_override = false})
+    }
+    else (read_offset, decoded_prefixes)
 }
 
 /*------------------------------------------------------------------------------
@@ -243,16 +254,16 @@ function clause decode_rm_operand(addressingMethod_G, instruction_ptr, read_offs
 
 // function to decode 2 register or memory operands
 // returns the new read offset, operand1, and operand2
-val decode_2_rm_operands: (bits(64), int, addressingMethod, word_size, addressingMethod, word_size) -> (int, rm_operand, rmi_operand)
-function decode_2_rm_operands(instruction_ptr, read_offset, addressing_method_1, wsize_1, addressing_method_2, wsize_2) = {
+val decode_2_rm_operands: (bits(64), int, decodeOperandType, decodeOperandType) -> (int, rm_operand, rmi_operand)
+function decode_2_rm_operands(instruction_ptr, read_offset, operand1_type, operand2_type) = {
     let mod_rm_byte: modRMByte = {
         let mod_rm_byte_contents = 
         read_memory(1, instruction_ptr + read_offset, create_iFetchAccessDescriptor()) in
         struct {bits = mod_rm_byte_contents}
     };
     let new_offset = read_offset + 1;
-    let (new_offset2, operand1) = decode_rm_operand(addressing_method_1, instruction_ptr, new_offset, mod_rm_byte, wsize_1);
-    let (new_offset3, working_operand2) = decode_rm_operand(addressing_method_2, instruction_ptr, new_offset2, mod_rm_byte, wsize_2);
+    let (new_offset2, operand1) = decode_rm_operand(operand1_type.addressing_method, instruction_ptr, new_offset, mod_rm_byte, operand1_type.wsize);
+    let (new_offset3, working_operand2) = decode_rm_operand(operand2_type.addressing_method, instruction_ptr, new_offset2, mod_rm_byte, operand2_type.wsize);
     let operand2: rmi_operand = match working_operand2 {
         rm_REG(value) => rmi_REG(value),
         rm_MEM(value) => rmi_MEM(value)

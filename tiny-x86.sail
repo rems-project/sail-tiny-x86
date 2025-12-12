@@ -32,7 +32,7 @@ function clause decode_one_byte_instruction(0x89, instruction_ptr, read_offset, 
         // opcode is for MOV r/m32, r32
         // addressing method + operand type: Ev, Gv --> (E, size, G, size)
         let (new_read_offset, operand1, operand2) = 
-            decode_2_operands(instruction_ptr, read_offset, addressingMethod_E, 32, addressingMethod_G, 32);
+            decode_2_rm_operands(instruction_ptr, read_offset, addressingMethod_E, 32, addressingMethod_G, 32);
         Some(new_read_offset, MOV(32, operand1, operand2))
     }
     else None()

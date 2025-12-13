@@ -212,6 +212,8 @@ scattered function decode_rm_operand
 /* function definition for addressing method E:
  of the mod r/m byte, the mod bits and r/m bits determine the operand */
 function clause decode_rm_operand(addressingMethod_E, instruction_ptr, read_offset, mod_rm_byte, wsize, REX) = {
+    // TODO: Support operand size 16 (mod r/m byte behaviour is not yet supported for 16 bit operands)
+    if wsize == 16 then fail("OPERAND SIZE 16 BITS NOT YET SUPPORTED");
     // read r/m bits (returns register index)
     let reg_used: reg_index = read_mod_rm_byte_RM(mod_rm_byte, REX);
     if mod_rm_byte[Mod] == 0b11 then 
@@ -305,7 +307,6 @@ function decode_2_rm_operands(instruction_ptr, read_offset, operand1_attr, opera
 val get_2_type_v_operands: (bits(64), int, addressingMethod, addressingMethod, decodedPrefixes) -> (int, word_size, rm_operand, rmi_operand)
 function get_2_type_v_operands(instruction_ptr, read_offset, operand1_addr_method, operand2_addr_method, decoded_prefixes) = {
     // the operand type is v, so wsize is determined by the operand size
-    // TODO: For now, ignore prefix decoded_prefixes.REX[R] == 0b0 (determines whether registers 8-15 can be accessed or not)
     let wsize = {
         if decoded_prefixes.op_size_override == true then 16
         else if decoded_prefixes.REX[W] == 0b1 then 64
@@ -324,6 +325,16 @@ function get_2_type_v_operands(instruction_ptr, read_offset, operand1_addr_metho
         decode_2_rm_operands(instruction_ptr, read_offset, operand1_attr, operand2_attr, decoded_prefixes.REX);
     (new_read_offset, wsize, operand1, operand2)
 }
+
+// Get 2 operands of the addressing method + operand type: Operand 1 = Ev, Operand 2 = Gv
+val get_Ev_Gv_operands: (bits(64), int, decodedPrefixes) -> (int, word_size, rm_operand, rmi_operand)
+function get_Ev_Gv_operands(instruction_ptr, read_offset, decoded_prefixes) =
+    get_2_type_v_operands(instruction_ptr, read_offset, addressingMethod_E, addressingMethod_G, decoded_prefixes)
+
+// Get 2 operands of the addressing method + operand type: Operand 1 = Gv, Operand 2 = Ev
+val get_Gv_Ev_operands: (bits(64), int, decodedPrefixes) -> (int, word_size, rm_operand, rmi_operand)
+function get_Gv_Ev_operands(instruction_ptr, read_offset, decoded_prefixes) =
+    get_2_type_v_operands(instruction_ptr, read_offset, addressingMethod_G, addressingMethod_E, decoded_prefixes)
 
 /*------------------------------------------------------------------------------
  * DECODE Instruction

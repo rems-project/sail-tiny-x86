@@ -28,19 +28,27 @@ function clause execute(MOV(wsize, dest, src)) = {
 
 // Decode MOV r/m{32, 64}, r{32, 64}
 function clause decode_one_byte_instruction(0x89, instruction_ptr, read_offset, decoded_prefixes) = {
-    // addressing method + operand type: Ev, Gv
-    let (new_read_offset, wsize, operand1, operand2) = 
-        get_2_type_v_operands(instruction_ptr, read_offset, addressingMethod_E, addressingMethod_G, decoded_prefixes);
+    // fail if lock prefix is set, as MOV does not support this
+    if decoded_prefixes.lock then fail("MOV instruction does not support the LOCK prefix");
+
+    // get 2 operands of the addressing method + operand type: Operand 1 = Ev, Operand 2 = Gv
+    let (new_read_offset, wsize, operand1, operand2) = get_Ev_Gv_operands(instruction_ptr, read_offset, decoded_prefixes);
+    // return new read offset and decoded instruction
     Some(new_read_offset, MOV(wsize, operand1, operand2))
 }
 
 // Decode MOV r{32, 64}, r/m{32, 64}
 function clause decode_one_byte_instruction(0x8B, instruction_ptr, read_offset, decoded_prefixes) = {
-    // addressing method + operand type: Gv, Ev
-    let (new_read_offset, wsize, operand1, operand2) = 
-        get_2_type_v_operands(instruction_ptr, read_offset, addressingMethod_G, addressingMethod_E, decoded_prefixes);
+    // fail if lock prefix is set, as MOV does not support this
+    if decoded_prefixes.lock then fail("MOV instruction does not support the LOCK prefix");
+
+    // get 2 operands of the addressing method + operand type: Operand 1 = Gv, Operand 2 = Ev
+    let (new_read_offset, wsize, operand1, operand2) = get_Gv_Ev_operands(instruction_ptr, read_offset, decoded_prefixes);
+    // return new read offset and decoded instruction
     Some(new_read_offset, MOV(wsize, operand1, operand2))
 }
+
+/* XOR */
 
 function clause execute(XOR(lock, wsize, dest, src)) = {
     // XOR cannot occur between dest = memory location and src = memory location
@@ -74,6 +82,22 @@ function clause execute(XOR(lock, wsize, dest, src)) = {
     update_parity_flag(result);
 }
 
+// Decode XOR r/m{32, 64}, r{32, 64}
+function clause decode_one_byte_instruction(0x31, instruction_ptr, read_offset, decoded_prefixes) = {
+    // get 2 operands of the addressing method + operand type: Operand 1 = Ev, Operand 2 = Gv
+    let (new_read_offset, wsize, operand1, operand2) = get_Ev_Gv_operands(instruction_ptr, read_offset, decoded_prefixes);
+    // return new read offset and decoded instruction
+    Some(new_read_offset, XOR(decoded_prefixes.lock, wsize, operand1, operand2))
+}
+
+// Decode XOR r{32, 64}, r/m{32, 64}
+function clause decode_one_byte_instruction(0x33, instruction_ptr, read_offset, decoded_prefixes) = {
+    // get 2 operands of the addressing method + operand type: Operand 1 = Gv, Operand 2 = Ev
+    let (new_read_offset, wsize, operand1, operand2) = get_Gv_Ev_operands(instruction_ptr, read_offset, decoded_prefixes);
+    // return new read offset and decoded instruction
+    Some(new_read_offset, XOR(decoded_prefixes.lock, wsize, operand1, operand2))
+}
+
 // Wait_On_Following_Stores_Until(preceding_stores_globally_visible);
 function clause execute(SFENCE()) = {
     // apply barrier
@@ -91,6 +115,8 @@ function clause execute(MFENCE()) = {
     // apply barrier
     sail_barrier(Barrier_MFENCE)
 }
+
+/* CMP */
 
 function clause execute(CMP(wsize, first, second)) = {
     // CMP cannot occur between first = memory location and second = memory location
@@ -119,6 +145,26 @@ function clause execute(CMP(wsize, first, second)) = {
     RFLAGS[AF] = if unsigned(first_val[3 .. 0]) < unsigned(second_val[3 .. 0]) then 0b1 else 0b0;
     // set parity flag if least significant byte of result contains an even number of 1 bits, else clear
     update_parity_flag(result);
+}
+
+// Decode CMP r/m{32, 64}, r{32, 64}
+function clause decode_one_byte_instruction(0x39, instruction_ptr, read_offset, decoded_prefixes) = {
+    // fail if lock prefix is set, as CMP does not support this
+    if decoded_prefixes.lock then fail("CMP instruction does not support the LOCK prefix");
+    // addressing method + operand type: Ev, Gv
+    let (new_read_offset, wsize, operand1, operand2) = 
+        get_2_type_v_operands(instruction_ptr, read_offset, addressingMethod_E, addressingMethod_G, decoded_prefixes);
+    Some(new_read_offset, CMP(wsize, operand1, operand2))
+}
+
+// Decode CMP r{32, 64}, r/m{32, 64}
+function clause decode_one_byte_instruction(0x3B, instruction_ptr, read_offset, decoded_prefixes) = {
+    // fail if lock prefix is set, as CMP does not support this
+    if decoded_prefixes.lock then fail("CMP instruction does not support the LOCK prefix");
+    // addressing method + operand type: Gv, Ev
+    let (new_read_offset, wsize, operand1, operand2) = 
+        get_2_type_v_operands(instruction_ptr, read_offset, addressingMethod_G, addressingMethod_E, decoded_prefixes);
+    Some(new_read_offset, CMP(wsize, operand1, operand2))
 }
 
 function clause execute(PUSH(wsize, src)) = {
@@ -152,6 +198,8 @@ function clause execute(POP(wsize, dest)) = {
     // increment stack pointer to free the popped stack space
     RSP = RSP + 8;
 }
+
+/* ADD */
 
 function clause execute(ADD(lock, wsize, dest, src)) = {
     // ADD cannot occur between dest = memory location and src = memory location
@@ -188,6 +236,24 @@ function clause execute(ADD(lock, wsize, dest, src)) = {
     update_parity_flag(result);
 }
 
+// Decode ADD r/m{32, 64}, r{32, 64}
+function clause decode_one_byte_instruction(0x01, instruction_ptr, read_offset, decoded_prefixes) = {
+    // get 2 operands of the addressing method + operand type: Operand 1 = Ev, Operand 2 = Gv
+    let (new_read_offset, wsize, operand1, operand2) = get_Ev_Gv_operands(instruction_ptr, read_offset, decoded_prefixes);
+    // return new read offset and decoded instruction
+    Some(new_read_offset, ADD(decoded_prefixes.lock, wsize, operand1, operand2))
+}
+
+// Decode ADD r{32, 64}, r/m{32, 64}
+function clause decode_one_byte_instruction(0x03, instruction_ptr, read_offset, decoded_prefixes) = {
+    // get 2 operands of the addressing method + operand type: Operand 1 = Gv, Operand 2 = Ev
+    let (new_read_offset, wsize, operand1, operand2) = get_Gv_Ev_operands(instruction_ptr, read_offset, decoded_prefixes);
+    // return new read offset and decoded instruction
+    Some(new_read_offset, ADD(decoded_prefixes.lock, wsize, operand1, operand2))
+}
+
+/* SUB */
+
 function clause execute(SUB(lock, wsize, dest, src)) = {
     // SUB cannot occur between dest = memory location and src = memory location
     fail_if_two_mem_operands(dest, src, "SUB");
@@ -221,6 +287,22 @@ function clause execute(SUB(lock, wsize, dest, src)) = {
     RFLAGS[AF] = if unsigned(dest_val[3 .. 0]) < unsigned(src_val[3 .. 0]) then 0b1 else 0b0;
     // set parity flag if least significant byte of result contains an even number of 1 bits, else clear
     update_parity_flag(result);
+}
+
+// Decode SUB r/m{32, 64}, r{32, 64}
+function clause decode_one_byte_instruction(0x29, instruction_ptr, read_offset, decoded_prefixes) = {
+    // get 2 operands of the addressing method + operand type: Operand 1 = Ev, Operand 2 = Gv
+    let (new_read_offset, wsize, operand1, operand2) = get_Ev_Gv_operands(instruction_ptr, read_offset, decoded_prefixes);
+    // return new read offset and decoded instruction
+    Some(new_read_offset, SUB(decoded_prefixes.lock, wsize, operand1, operand2))
+}
+
+// Decode SUB r{32, 64}, r/m{32, 64}
+function clause decode_one_byte_instruction(0x2B, instruction_ptr, read_offset, decoded_prefixes) = {
+    // get 2 operands of the addressing method + operand type: Operand 1 = Gv, Operand 2 = Ev
+    let (new_read_offset, wsize, operand1, operand2) = get_Gv_Ev_operands(instruction_ptr, read_offset, decoded_prefixes);
+    // return new read offset and decoded instruction
+    Some(new_read_offset, SUB(decoded_prefixes.lock, wsize, operand1, operand2))
 }
 
 function clause execute(IMUL(wsize, dest, src)) = {

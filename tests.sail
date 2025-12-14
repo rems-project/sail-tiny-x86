@@ -100,7 +100,7 @@ function call_leave_ret() -> unit = {
   execute(MOV(64, rm_REG(5), rmi_REG(4))); // 4 is the reg_index for RSP, 5 for RBP
 
   // leave test
-  execute(LEAVE());
+  execute(LEAVE(64));
   assert(RSP == old_RSP, "LEAVE instruction does not increment RSP correctly (when popping from the stack)");
   assert(RBP == old_RBP, "LEAVE instruction does not pop correct item from the stack into RBP");
 

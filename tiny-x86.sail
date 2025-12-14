@@ -428,15 +428,24 @@ function clause decode_one_byte_instruction(0xE8, instruction_ptr, read_offset, 
     Some(new_read_offset, CALL(operand))
 }
 
-function clause execute(LEAVE()) = {
+/* LEAVE */
+
+function clause execute(LEAVE(wsize)) = {
     /* copy frame pointer (RBP) into the stack pointer register (RSP)
     to release the stack space allocated to the topmost stack frame */
     RSP = RBP;
-    // pop value into RBP
-    RBP = read_operand(false, 64, rm_MEM(RSP));
+
+    // pop value from the stack
+    let popped_value = read_operand(false, wsize, rm_MEM(RSP));
+    // store popped value in RBP
+    write_GPR(wsize, 5, popped_value);
     // increment stack pointer to free the popped stack space
-    RSP = RSP + 8;
+    RSP = RSP + (wsize / 8);
 }
+
+//function clause decode_one_byte_instruction(0xC9, instruction_ptr, read_offset, decoded_prefixes)
+
+/* RET */
 
 function clause execute(RET()) = {
     /* execute near return */

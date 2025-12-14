@@ -167,12 +167,15 @@ function clause decode_one_byte_instruction(0x3B, instruction_ptr, read_offset, 
     Some(new_read_offset, CMP(wsize, operand1, operand2))
 }
 
+/* PUSH */
+
 function clause execute(PUSH(wsize, src)) = {
     // PUSH instruction does not allow src = imm64, reg8 or mem8
+    // and in 64-bit mode, src = reg32 and mem32 are not encodable
     match src {
         rmi_IMM(_) if wsize == 64 => fail("Operand for PUSH operation not allowed"),
-        rmi_REG(_) if wsize == 8 => fail("Operand for PUSH operation not allowed"),
-        rmi_MEM(_) if wsize == 8 => fail("Operand for PUSH operation not allowed"),
+        rmi_REG(_) if wsize == 8 | wsize == 32 => fail("Operand for PUSH operation not allowed"),
+        rmi_MEM(_) if wsize == 8 | wsize == 32 => fail("Operand for PUSH operation not allowed"),
         _ => ()
     };
 
@@ -186,6 +189,61 @@ function clause execute(PUSH(wsize, src)) = {
     write_operand(false, 64, dest_address, src_val)
 }
 
+// Decode PUSH imm8
+function clause decode_one_byte_instruction(0x6A, instruction_ptr, read_offset, decoded_prefixes) = {
+    let (new_read_offset, imm) = decode_imm_operand(instruction_ptr, read_offset, 8);
+    Some(new_read_offset, PUSH(8, rmi_IMM(imm)))
+}
+
+// Decode PUSH imm{16, 32}
+function clause decode_one_byte_instruction(0x68, instruction_ptr, read_offset, decoded_prefixes) = {
+    let wsize = if decoded_prefixes.op_size_override then 16 else 32;
+    let (new_read_offset, imm) = decode_imm_operand(instruction_ptr, read_offset, wsize);
+    Some(new_read_offset, PUSH(wsize, rmi_IMM(imm)))
+}
+
+// Decode PUSH r/m64 (r/m16 not yet supported)
+/* WARNING: Opcode FF encodes a group of instructions. The exact instruction encoded is specified in the reg field of the mod r/m byte.
+Out of all instructions with opcode FF, we currently only support the PUSH instruction. */
+function clause decode_one_byte_instruction(0xFF, instruction_ptr, read_offset, decoded_prefixes) = {
+    // fetch mod r/m byte
+    let (new_read_offset, mod_rm_byte) = read_mod_rm_byte(instruction_ptr, read_offset);
+
+    // If the opcode extension does not point to a PUSH instruction then fail
+    if unsigned(mod_rm_byte[REG]) != 6 then fail("The instruction to be decoded is either reserved or not implemented in this model");
+    
+    // We have a push instruction (PUSH r/m{16, 64})
+    // Decode operand
+    let (final_read_offset, wsize, working_operand) = 
+        decode_push_or_pop_rm_operand(instruction_ptr, new_read_offset, decoded_prefixes, mod_rm_byte);
+
+    // Change the operand type from rm_operand to rmi_operand to match the AST
+    let operand: rmi_operand = match working_operand {
+        rm_REG(contents) => rmi_REG(contents),
+        rm_MEM(contents) => rmi_MEM(contents)
+    };
+
+    // return decoded instruction
+    Some(final_read_offset, PUSH(wsize,operand))
+}
+
+// Decode PUSH r{16, 64} and POP r{16, 64}
+function clause decode_one_byte_instruction(0x5 @ is_pop: bits(1) @ reg_field: bits(3), instruction_ptr, read_offset, decoded_prefixes) = {
+    // fail if lock prefix is set, as PUSH does not support this
+    if decoded_prefixes.lock then fail("Exception #UD — Invalid Opcode (Undefined Opcode): PUSH instruction does not support the LOCK prefix");
+    // get register location embedded in the opcode
+    let reg_index = get_reg_value_in_opcode_byte(reg_field, decoded_prefixes.REX);
+    // get wsize. For PUSH, a reg operand can either be 16 or 64 bits
+    let wsize = if decoded_prefixes.op_size_override then 16 else 64;
+
+    if is_pop == 0b0 then
+        Some(read_offset, PUSH(wsize, rmi_REG(reg_index)))
+    else
+        Some(read_offset, POP(wsize, rm_REG(reg_index)))
+}
+
+/* POP */
+
 function clause execute(POP(wsize, dest)) = {
     // POP instruction does not allow dest to be 8 bits long. Due to 64 bit addressing, dest also cannot be 32 bits long.
     // Also not allowing a 16-bit dest in this model for simplicity (to keep the stack aligned)
@@ -198,6 +256,23 @@ function clause execute(POP(wsize, dest)) = {
     // increment stack pointer to free the popped stack space
     RSP = RSP + 8;
 }
+
+// Decode POP r/m64 (r/m16 not yet supported)
+function clause decode_one_byte_instruction(0x8F, instruction_ptr, read_offset, decoded_prefixes) = {
+    // fetch mod r/m byte
+    let (new_read_offset, mod_rm_byte) = read_mod_rm_byte(instruction_ptr, read_offset);
+    // If the opcode extension does not point to a PUSH instruction then fail
+    if unsigned(mod_rm_byte[REG]) != 0 then fail("The instruction to be decoded is reserved");
+    
+    // We have a pop instruction (POP r/m{16, 64})
+    // Decode operand
+    let (final_read_offset, wsize, operand) = 
+        decode_push_or_pop_rm_operand(instruction_ptr, new_read_offset, decoded_prefixes, mod_rm_byte);
+    // return decoded instruction
+    Some(final_read_offset, POP(wsize,operand))
+}
+
+// Decode POP r{16, 64} is implemented with "Decode PUSH r{16, 64}"
 
 /* ADD */
 
@@ -328,6 +403,8 @@ function clause execute(IMUL(wsize, dest, src)) = {
     }
 }
 
+/* CALL */
+
 function clause execute(CALL(rel32)) = {
     /* execute near relative call */
     let displacement = sail_sign_extend(rel32, 64);
@@ -337,6 +414,18 @@ function clause execute(CALL(rel32)) = {
     write_operand(false, 64, rm_MEM(RSP), RIP);
     // change RIP as specified by the instruction
     RIP = add_bits(RIP, displacement);
+}
+
+// Decode CALL rel32
+function clause decode_one_byte_instruction(0xE8, instruction_ptr, read_offset, decoded_prefixes) = {
+    // CALL rel16, an instruction with the same opcode, is not supported in 64-bit mode
+    if decoded_prefixes.op_size_override then fail("CALL rel16 is not supported in 64-bit mode");
+    // read 32-bit immediate
+    let operand = read_memory(4, instruction_ptr + read_offset, create_iFetchAccessDescriptor());
+    // increment read offset
+    let new_read_offset = read_offset + 4;
+    // return new read offset + decoded instruction
+    Some(new_read_offset, CALL(operand))
 }
 
 function clause execute(LEAVE()) = {
@@ -357,12 +446,26 @@ function clause execute(RET()) = {
     RSP = RSP + 8;
 }
 
+/* JMP */
+
 function clause execute(JMP(rel8)) = {
     /* execute jump short */
     // add the operand to the current instruction pointer value
     let displacement = sail_sign_extend(rel8, 64);
     RIP = RIP + displacement;
 }
+
+// Decode JMP rel8
+function clause decode_one_byte_instruction(0xE8, instruction_ptr, read_offset, decoded_prefixes) = {
+    // read 8-bit immediate
+    let operand = read_memory(1, instruction_ptr + read_offset, create_iFetchAccessDescriptor());
+    // increment read offset
+    let new_read_offset = read_offset + 1;
+    // return new read offset + decoded instruction
+    Some(new_read_offset, JMP(operand))
+}
+
+/* JNS */
 
 function clause execute(JNS(rel8)) = {
     /* execute jump short if not sign */
@@ -371,6 +474,16 @@ function clause execute(JNS(rel8)) = {
         let displacement = sail_sign_extend(rel8, 64);
         RIP = RIP + displacement;
     }
+}
+
+// Decode JNS rel8
+function clause decode_one_byte_instruction(0x79, instruction_ptr, read_offset, decoded_prefixes) = {
+    // read 8-bit immediate
+    let operand = read_memory(1, instruction_ptr + read_offset, create_iFetchAccessDescriptor());
+    // increment read offset
+    let new_read_offset = read_offset + 1;
+    // return new read offset + decoded instruction
+    Some(new_read_offset, JNS(operand))
 }
 
 end execute

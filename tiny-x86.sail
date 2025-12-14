@@ -92,6 +92,8 @@ function clause decode_one_byte_instruction(0x33, instruction_ptr, read_offset, 
     Some(new_read_offset, XOR(decoded_prefixes.lock, wsize, operand1, operand2))
 }
 
+/* SFENCE */
+
 // Wait_On_Following_Stores_Until(preceding_stores_globally_visible);
 function clause execute(SFENCE()) = {
     // apply barrier
@@ -495,3 +497,12 @@ function clause decode_one_byte_instruction(0x79, instruction_ptr, read_offset, 
 }
 
 end execute
+
+// Decode cases for opcodes that the model, or x86, does not support
+function clause decode_one_byte_instruction(_, instruction_ptr, read_offset, decoded_prefixes) = None()
+function clause decode_two_byte_instruction(_, instruction_ptr, read_offset, decoded_prefixes) = None()
+function clause decode_three_byte_instruction(_, instruction_ptr, read_offset, decoded_prefixes) = None()
+
+end decode_one_byte_instruction
+end decode_two_byte_instruction
+end decode_three_byte_instruction

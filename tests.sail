@@ -162,9 +162,71 @@ function decode_mov_r64_rm64() -> unit = {
   assert(decoded_instruction == MOV(64, rm_REG(4 + 8), rmi_MEM(expected_rmi_MEM)), "MOV(64, r64, rm64) instruction not decoded properly");
 }
 
+function decode_push_imm16() -> unit = {
+  // Testing that PUSH IMM16(0x4567) is decoded correctly
+  // Write prefix and opcode to memory
+  let instruction: bits(16) = 0x66 @ 0x68;
+  write_instruction_to_memory(instruction, RIP);
+  // Write immediate value to memory
+  let imm = 0x4567;
+  write_memory(2, RIP + 2, imm, create_writeAccessDescriptor());
+  // Decode and test
+  let (new_rip, decoded_instruction) = decode(RIP);
+  assert(decoded_instruction == PUSH(16, rmi_IMM(IMM16(0x4567))), "PUSH(16, imm16) instruction not decoded properly");
+}
+
+function decode_push_m64() -> unit = {
+  // Testing that PUSH MEM64([RDI] + 0xFF (sign-extended)) is decoded correctly
+  // Write to RDI
+  write_GPR(64, 7, 0x1234_5678_9ABC_DEF0);
+  // Write instruction to memory. Instruction consists of opcode, mod r/m byte, then 8-bit displacement
+  let instruction: bits(24) = 0xFF @ 0b01_110_111 @ 0xFF;
+  write_instruction_to_memory(instruction, RIP);
+  // Calculate expected memory address ([RDI] + 0xFF (sign-extended))
+  let expected_mem_address = add_bits(read_GPR(64, 7), sail_sign_extend(0xFF, 64));
+  // Decode and test
+  let (new_rip, decoded_instruction) = decode(RIP);
+  assert(decoded_instruction == PUSH(64, rmi_MEM(expected_mem_address)), "PUSH(64, m64) instruction not decoded properly");
+}
+
+function decode_push_r16() -> unit = {
+  // Testing that PUSH REG16(R8) is decoded correctly
+  // Write instruction to memory. Instruction consists of operand size override prefix, rex prefix, and opcode with embedded register location
+  let instruction: bits(24) = 0x66 @ 0b0100_0001 @ 0x5 @ 0b0 @ 0b000;
+  write_instruction_to_memory(instruction, RIP);
+  // Decode and test
+  let (new_rip, decoded_instruction) = decode(RIP);
+  assert(decoded_instruction == PUSH(16, rmi_REG(8)), "PUSH(16, r16) instruction not decoded properly")
+}
+
+function decode_pop_r16() -> unit = {
+  // Testing that POP REG16(RSI) is decoded correctly
+  // Write instruction to memory. Instruction consists of operand size override prefix, opcode, and mod r/m byte
+  let instruction: bits(24) = 0x66 @ 0x8F @ 0b11_000_110;
+  write_instruction_to_memory(instruction, RIP);
+  // Decode and test
+  let (new_rip, decoded_instruction) = decode(RIP);
+  assert(decoded_instruction == POP(16, rm_REG(6)), "POP(16, r16) not decoded properly")
+}
+
+function decode_pop_r64() -> unit = {
+  // Testing that POP REG64(RAX) is decoded correctly
+  // Write instruction to memory. Instruction consists of empty REX prefix, and opcode with embedded register location
+  let instruction: bits(16) = 0b0100_0000 @ 0x5 @ 0b1 @ 0b000;
+  write_instruction_to_memory(instruction, RIP);
+  // Decode and test
+  let (new_rip, decoded_instruction) = decode(RIP);
+  assert(decoded_instruction == POP(64, rm_REG(0)), "POP(64, r64) not decoded properly")
+}
+
 function test_decode() -> unit = {
   decode_mov_rm32_r32();
   decode_mov_r64_rm64();
+  decode_push_imm16();
+  decode_push_m64();
+  decode_push_r16();
+  decode_pop_r16();
+  decode_pop_r64();
 }
 
 function main() : unit -> unit = {

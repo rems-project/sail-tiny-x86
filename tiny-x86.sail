@@ -28,9 +28,6 @@ function clause execute(MOV(wsize, dest, src)) = {
 
 // Decode MOV r/m{32, 64}, r{32, 64}
 function clause decode_one_byte_instruction(0x89, instruction_ptr, read_offset, decoded_prefixes) = {
-    // fail if lock prefix is set, as MOV does not support this
-    if decoded_prefixes.lock then fail("Exception #UD — Invalid Opcode (Undefined Opcode): MOV instruction does not support the LOCK prefix");
-
     // get 2 operands of the addressing method + operand type: Operand 1 = Ev, Operand 2 = Gv
     let (new_read_offset, wsize, operand1, operand2) = get_Ev_Gv_operands(instruction_ptr, read_offset, decoded_prefixes);
     // return new read offset and decoded instruction
@@ -39,9 +36,6 @@ function clause decode_one_byte_instruction(0x89, instruction_ptr, read_offset, 
 
 // Decode MOV r{32, 64}, r/m{32, 64}
 function clause decode_one_byte_instruction(0x8B, instruction_ptr, read_offset, decoded_prefixes) = {
-    // fail if lock prefix is set, as MOV does not support this
-    if decoded_prefixes.lock then fail("Exception #UD — Invalid Opcode (Undefined Opcode): MOV instruction does not support the LOCK prefix");
-
     // get 2 operands of the addressing method + operand type: Operand 1 = Gv, Operand 2 = Ev
     let (new_read_offset, wsize, operand1, operand2) = get_Gv_Ev_operands(instruction_ptr, read_offset, decoded_prefixes);
     // return new read offset and decoded instruction
@@ -149,8 +143,6 @@ function clause execute(CMP(wsize, first, second)) = {
 
 // Decode CMP r/m{32, 64}, r{32, 64}
 function clause decode_one_byte_instruction(0x39, instruction_ptr, read_offset, decoded_prefixes) = {
-    // fail if lock prefix is set, as CMP does not support this
-    if decoded_prefixes.lock then fail("Exception #UD — Invalid Opcode (Undefined Opcode): CMP instruction does not support the LOCK prefix");
     // addressing method + operand type: Ev, Gv
     let (new_read_offset, wsize, operand1, operand2) = 
         get_2_type_v_operands(instruction_ptr, read_offset, addressingMethod_E, addressingMethod_G, decoded_prefixes);
@@ -159,8 +151,6 @@ function clause decode_one_byte_instruction(0x39, instruction_ptr, read_offset, 
 
 // Decode CMP r{32, 64}, r/m{32, 64}
 function clause decode_one_byte_instruction(0x3B, instruction_ptr, read_offset, decoded_prefixes) = {
-    // fail if lock prefix is set, as CMP does not support this
-    if decoded_prefixes.lock then fail("Exception #UD — Invalid Opcode (Undefined Opcode): CMP instruction does not support the LOCK prefix");
     // addressing method + operand type: Gv, Ev
     let (new_read_offset, wsize, operand1, operand2) = 
         get_2_type_v_operands(instruction_ptr, read_offset, addressingMethod_G, addressingMethod_E, decoded_prefixes);

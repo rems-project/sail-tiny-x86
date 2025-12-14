@@ -417,6 +417,16 @@ function decode(instruction_ptr) = {
         },
         Some(offset, instruction) => {
             if offset > 15 then fail("Instruction is longer than 15 bytes, hence is not valid");
+            
+            // Fail if the instruction contains a lock prefix but doesn't support the lock prefix
+            match instruction {
+                XOR(_) => (),
+                ADD(_) => (),
+                SUB(_) => (),
+                _ if decoded_prefixes.lock => fail("Exception #UD — Invalid Opcode (Undefined Opcode): instruction does not support the LOCK prefix"),
+                _ => ()
+            };
+            
             (instruction_ptr + offset, instruction)
         }
     }

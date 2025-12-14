@@ -13,7 +13,7 @@ union ast = {
     SUB: (bool, word_size, rm_operand, rmi_operand),
     IMUL: (word_size, reg_index, rm_operand), // IMUL with only 2 arguments (dest and src)
     CALL: imm32,
-    LEAVE: unit,
+    LEAVE: {16, 64}, // operand size can be 16 or 64 bits
     RET: unit, // near return only
     JMP: imm8, // jump short only
     JNS: imm8 // jump short if not sign only
@@ -247,7 +247,7 @@ function clause decode_rm_operand_inner(addressingMethod_E, instruction_ptr, rea
     else {
         // TODO: Support operand m16 (mod r/m byte behaviour is not yet supported for 16 bit memory operands)
         if wsize == 16 then fail("OPERAND SIZE 16 BITS NOT YET SUPPORTED");
-        
+
         // the mod and r/m bits are used to specify a memory location
         var new_read_offset: int = read_offset;
         var working_val = {
@@ -413,7 +413,7 @@ function decode(instruction_ptr) = {
     match res {
         None() => {
             fail("Invalid instruction");
-            (instruction_ptr, LEAVE()) // this line should not be reachable, needed to keep return type consistent
+            (instruction_ptr, LEAVE(64)) // this line should not be reachable, needed to keep return type consistent
         },
         Some(offset, instruction) => {
             if offset > 15 then fail("Instruction is longer than 15 bytes, hence is not valid");

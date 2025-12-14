@@ -13,7 +13,7 @@ union ast = {
     SUB: (bool, word_size, rm_operand, rmi_operand),
     IMUL: (word_size, reg_index, rm_operand), // IMUL with only 2 arguments (dest and src)
     CALL: imm32,
-    LEAVE: unit,
+    LEAVE: {16, 64}, // operand size can be 16 or 64 bits
     RET: unit, // near return only
     JMP: imm8, // jump short only
     JNS: imm8 // jump short if not sign only
@@ -141,12 +141,7 @@ function decode_prefix_inner(instruction_ptr, read_offset, decoded_prefixes, pre
 val decode_prefix: (bits(64), decodedPrefixes) -> (int, decodedPrefixes)
 function decode_prefix(instruction_ptr, decoded_prefixes) = {
     let (read_offset, decoded_prefixes) = decode_prefix_inner(instruction_ptr, 0, decoded_prefixes, 0x00);
-    if decoded_prefixes.REX[W] == 0b1 then {
-        // If the REX prefix was the last prefix before the opcode (i.e. REX is not ignored / reset), and REX[W] is set
-        // then the op_size_override prefix is ignored / reset
-        (read_offset, {decoded_prefixes with op_size_override = false})
-    }
-    else (read_offset, decoded_prefixes)
+    (read_offset, decoded_prefixes)
 }
 
 /*------------------------------------------------------------------------------
@@ -217,6 +212,20 @@ function read_mod_rm_byte(instruction_ptr, read_offset) = {
  * DECODE Register or Memory operands
  *-----------------------------------------------------------------------------*/
 
+// Get the operand size for an instruction which doesn't ignore the REX prefix
+val get_wsize_using_REX: (decodedPrefixes, {32, 64}) -> {16, 32, 64}
+function get_wsize_using_REX(decoded_prefixes, default_wsize) = {
+    if decoded_prefixes.REX[W] == 0b1 then 64 
+    else if decoded_prefixes.op_size_override then 16 
+    else default_wsize
+}
+
+// Get the operand size for an instruction which ignores the REX prefix
+val get_wsize_ignoring_REX: (decodedPrefixes, {32, 64}) -> {16, 32, 64}
+function get_wsize_ignoring_REX(decoded_prefixes, default_wsize) = {
+    if decoded_prefixes.op_size_override then 16
+    else default_wsize
+}
 val decode_imm_operand: (bits(64), int, word_size) -> (int, imm)
 function decode_imm_operand(instruction_ptr, read_offset, wsize) = {
     let wsize_bytes = wsize / 8;
@@ -247,7 +256,7 @@ function clause decode_rm_operand_inner(addressingMethod_E, instruction_ptr, rea
     else {
         // TODO: Support operand m16 (mod r/m byte behaviour is not yet supported for 16 bit memory operands)
         if wsize == 16 then fail("OPERAND SIZE 16 BITS NOT YET SUPPORTED");
-        
+
         // the mod and r/m bits are used to specify a memory location
         var new_read_offset: int = read_offset;
         var working_val = {
@@ -329,12 +338,8 @@ function decode_2_rm_operands(instruction_ptr, read_offset, operand1_attr, opera
     and the operand size depends on the operand size override and REX prefixes */
 val get_2_type_v_operands: (bits(64), int, addressingMethod, addressingMethod, decodedPrefixes) -> (int, word_size, rm_operand, rmi_operand)
 function get_2_type_v_operands(instruction_ptr, read_offset, operand1_addr_method, operand2_addr_method, decoded_prefixes) = {
-    // the operand type is v, so wsize is determined by the operand size
-    let wsize = {
-        if decoded_prefixes.op_size_override then 16
-        else if decoded_prefixes.REX[W] == 0b1 then 64
-        else 32
-    };
+    // the operand type is v, so wsize is determined by the operand size. Default wsize is 32 bits.
+    let wsize = get_wsize_using_REX(decoded_prefixes, 32);
     // use operand attributes (containing addressing mode and word size) to decode operands
     let operand1_attr: operandAttributes = struct {
         addressing_method = operand1_addr_method,
@@ -362,8 +367,8 @@ function get_Gv_Ev_operands(instruction_ptr, read_offset, decoded_prefixes) =
 // function to decode a r/m operand for PUSH and POP instructions
 val decode_push_or_pop_rm_operand: (bits(64), int, decodedPrefixes, modRMByte) -> (int, word_size, rm_operand)
 function decode_push_or_pop_rm_operand(instruction_ptr, read_offset, decoded_prefixes, mod_rm_byte) = {
-    // Default operand size is 64 bits for instructions implicitly using the RSP, but can be changed to 16 bits.
-    let wsize = if decoded_prefixes.op_size_override then 16 else 64;
+    // Get wsize. Default wsize is 64 bits. Ignore REX.
+    let wsize = get_wsize_ignoring_REX(decoded_prefixes, 64);
     // Decode operand. Operand addressing method + operand type is Ev
     let (final_offset, operand) = decode_rm_operand_inner(addressingMethod_E, instruction_ptr, read_offset, mod_rm_byte, wsize, decoded_prefixes.REX);
     (final_offset, wsize, operand)
@@ -376,18 +381,42 @@ function decode_push_or_pop_rm_operand(instruction_ptr, read_offset, decoded_pre
 val decode_one_byte_instruction: (bits(8), bits(64), int, decodedPrefixes) -> option((int, ast))
 scattered function decode_one_byte_instruction
 
+// function to decode three byte instructions. Function definitions are inlined with corresponding execute definitions
+val decode_two_byte_instruction: (bits(16), bits(64), int, decodedPrefixes) -> option((int, ast))
+scattered function decode_three_byte_instruction
+
+// function to decode three byte instructions. Function definitions are inlined with corresponding execute definitions
+val decode_three_byte_instruction: (bits(24), bits(64), int, decodedPrefixes) -> option((int, ast))
+scattered function decode_three_byte_instruction
+
 // function to decode the main instruction
 // returns the new read offset, an incomplete AST entry, and a struct of optional instruction parts we now know to exist
 val decode_instruction: (bits(64), int, decodedPrefixes) -> option((int, ast))
 function decode_instruction(instruction_ptr, read_offset, decoded_prefixes) = {
-    /* decode the opcode */
-    // first try one byte decode
+    /* first see if our opcode is one byte. If so, decode the instruction */
     // fetch the first opcode byte from memory
     let one_byte_opcode = read_memory(1, instruction_ptr + read_offset, create_iFetchAccessDescriptor());
     // increment read_offset
-    let new_read_offset = read_offset + 1;
-    // try to decode the opcode and findd the instruction operands
-    let res = decode_one_byte_instruction(one_byte_opcode, instruction_ptr, new_read_offset, decoded_prefixes);
+    var new_read_offset: int = read_offset + 1;
+    // try to decode the opcode and find the instruction operands
+    var res = decode_one_byte_instruction(one_byte_opcode, instruction_ptr, new_read_offset, decoded_prefixes);
+
+    // If the first byte of the opcode could not be decoded
+    if res == None() then {
+        /* See if our opcode is two bytes long. If so, decode the instruction */
+        let two_byte_opcode = one_byte_opcode @ read_memory(1, instruction_ptr + new_read_offset, create_iFetchAccessDescriptor());
+        new_read_offset = new_read_offset + 1;
+        res = decode_two_byte_instruction(two_byte_opcode, instruction_ptr, new_read_offset, decoded_prefixes);
+
+        // If the first 2 bytes of the opcode could not be decoded
+        if res == None() then {
+            /* See if our opcode is three bytes long. If so, decode the instruction */
+            let three_byte_opcode = two_byte_opcode @ read_memory(1, instruction_ptr + new_read_offset, create_iFetchAccessDescriptor());
+            new_read_offset = new_read_offset + 1;
+            res = decode_three_byte_instruction(three_byte_opcode, instruction_ptr, new_read_offset, decoded_prefixes);
+        };
+    };
+
     res
 }
 
@@ -413,10 +442,20 @@ function decode(instruction_ptr) = {
     match res {
         None() => {
             fail("Invalid instruction");
-            (instruction_ptr, LEAVE()) // this line should not be reachable, needed to keep return type consistent
+            (instruction_ptr, LEAVE(64)) // this line should not be reachable, needed to keep return type consistent
         },
         Some(offset, instruction) => {
             if offset > 15 then fail("Instruction is longer than 15 bytes, hence is not valid");
+            
+            // Fail if the instruction contains a lock prefix but doesn't support the lock prefix
+            match instruction {
+                XOR(_) => (),
+                ADD(_) => (),
+                SUB(_) => (),
+                _ if decoded_prefixes.lock => fail("Exception #UD — Invalid Opcode (Undefined Opcode): instruction does not support the LOCK prefix"),
+                _ => ()
+            };
+            
             (instruction_ptr + offset, instruction)
         }
     }

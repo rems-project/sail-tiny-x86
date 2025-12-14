@@ -376,18 +376,42 @@ function decode_push_or_pop_rm_operand(instruction_ptr, read_offset, decoded_pre
 val decode_one_byte_instruction: (bits(8), bits(64), int, decodedPrefixes) -> option((int, ast))
 scattered function decode_one_byte_instruction
 
+// function to decode three byte instructions. Function definitions are inlined with corresponding execute definitions
+val decode_two_byte_instruction: (bits(16), bits(64), int, decodedPrefixes) -> option((int, ast))
+scattered function decode_three_byte_instruction
+
+// function to decode three byte instructions. Function definitions are inlined with corresponding execute definitions
+val decode_three_byte_instruction: (bits(24), bits(64), int, decodedPrefixes) -> option((int, ast))
+scattered function decode_three_byte_instruction
+
 // function to decode the main instruction
 // returns the new read offset, an incomplete AST entry, and a struct of optional instruction parts we now know to exist
 val decode_instruction: (bits(64), int, decodedPrefixes) -> option((int, ast))
 function decode_instruction(instruction_ptr, read_offset, decoded_prefixes) = {
-    /* decode the opcode */
-    // first try one byte decode
+    /* first see if our opcode is one byte. If so, decode the instruction */
     // fetch the first opcode byte from memory
     let one_byte_opcode = read_memory(1, instruction_ptr + read_offset, create_iFetchAccessDescriptor());
     // increment read_offset
-    let new_read_offset = read_offset + 1;
-    // try to decode the opcode and findd the instruction operands
-    let res = decode_one_byte_instruction(one_byte_opcode, instruction_ptr, new_read_offset, decoded_prefixes);
+    var new_read_offset: int = read_offset + 1;
+    // try to decode the opcode and find the instruction operands
+    var res = decode_one_byte_instruction(one_byte_opcode, instruction_ptr, new_read_offset, decoded_prefixes);
+
+    // If the first byte of the opcode could not be decoded
+    if res == None() then {
+        /* See if our opcode is two bytes long. If so, decode the instruction */
+        let two_byte_opcode = one_byte_opcode @ read_memory(1, instruction_ptr + new_read_offset, create_iFetchAccessDescriptor());
+        new_read_offset = new_read_offset + 1;
+        res = decode_two_byte_instruction(two_byte_opcode, instruction_ptr, new_read_offset, decoded_prefixes);
+
+        // If the first 2 bytes of the opcode could not be decoded
+        if res == None() then {
+            /* See if our opcode is three bytes long. If so, decode the instruction */
+            let three_byte_opcode = two_byte_opcode @ read_memory(1, instruction_ptr + new_read_offset, create_iFetchAccessDescriptor());
+            new_read_offset = new_read_offset + 1;
+            res = decode_three_byte_instruction(three_byte_opcode, instruction_ptr, new_read_offset, decoded_prefixes);
+        };
+    };
+
     res
 }
 

@@ -443,7 +443,11 @@ function clause execute(LEAVE(wsize)) = {
     RSP = RSP + (wsize / 8);
 }
 
-//function clause decode_one_byte_instruction(0xC9, instruction_ptr, read_offset, decoded_prefixes)
+// Decode LEAVE instruction (operand size = 16 or 64 bits)
+function clause decode_one_byte_instruction(0xC9, instruction_ptr, read_offset, decoded_prefixes) = {
+    let wsize = if decoded_prefixes.op_size_override then 16 else 64;
+    Some(read_offset, LEAVE(wsize))
+}
 
 /* RET */
 
@@ -453,6 +457,11 @@ function clause execute(RET()) = {
     RIP = read_operand(false, 64, rm_MEM(RSP));
     // increment stack pointer to free the popped stack space
     RSP = RSP + 8;
+}
+
+// Decode near RET instruction
+function clause decode_one_byte_instruction(0xC3, instruction_ptr, read_offset, decoded_prefixes) = {
+    Some(read_offset, RET())
 }
 
 /* JMP */

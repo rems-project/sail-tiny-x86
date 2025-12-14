@@ -141,12 +141,7 @@ function decode_prefix_inner(instruction_ptr, read_offset, decoded_prefixes, pre
 val decode_prefix: (bits(64), decodedPrefixes) -> (int, decodedPrefixes)
 function decode_prefix(instruction_ptr, decoded_prefixes) = {
     let (read_offset, decoded_prefixes) = decode_prefix_inner(instruction_ptr, 0, decoded_prefixes, 0x00);
-    if decoded_prefixes.REX[W] == 0b1 then {
-        // If the REX prefix was the last prefix before the opcode (i.e. REX is not ignored / reset), and REX[W] is set
-        // then the op_size_override prefix is ignored / reset
-        (read_offset, {decoded_prefixes with op_size_override = false})
-    }
-    else (read_offset, decoded_prefixes)
+    (read_offset, decoded_prefixes)
 }
 
 /*------------------------------------------------------------------------------
@@ -217,6 +212,20 @@ function read_mod_rm_byte(instruction_ptr, read_offset) = {
  * DECODE Register or Memory operands
  *-----------------------------------------------------------------------------*/
 
+// Get the operand size for an instruction which doesn't ignore the REX prefix
+val get_wsize_using_REX: (decodedPrefixes, {32, 64}) -> {16, 32, 64}
+function get_wsize_using_REX(decoded_prefixes, default_wsize) = {
+    if decoded_prefixes.REX[W] == 0b1 then 64 
+    else if decoded_prefixes.op_size_override then 16 
+    else default_wsize
+}
+
+// Get the operand size for an instruction which ignores the REX prefix
+val get_wsize_ignoring_REX: (decodedPrefixes, {32, 64}) -> {16, 32, 64}
+function get_wsize_ignoring_REX(decoded_prefixes, default_wsize) = {
+    if decoded_prefixes.op_size_override then 16
+    else default_wsize
+}
 val decode_imm_operand: (bits(64), int, word_size) -> (int, imm)
 function decode_imm_operand(instruction_ptr, read_offset, wsize) = {
     let wsize_bytes = wsize / 8;
@@ -329,12 +338,8 @@ function decode_2_rm_operands(instruction_ptr, read_offset, operand1_attr, opera
     and the operand size depends on the operand size override and REX prefixes */
 val get_2_type_v_operands: (bits(64), int, addressingMethod, addressingMethod, decodedPrefixes) -> (int, word_size, rm_operand, rmi_operand)
 function get_2_type_v_operands(instruction_ptr, read_offset, operand1_addr_method, operand2_addr_method, decoded_prefixes) = {
-    // the operand type is v, so wsize is determined by the operand size
-    let wsize = {
-        if decoded_prefixes.op_size_override then 16
-        else if decoded_prefixes.REX[W] == 0b1 then 64
-        else 32
-    };
+    // the operand type is v, so wsize is determined by the operand size. Default wsize is 32 bits.
+    let wsize = get_wsize_using_REX(decoded_prefixes, 32);
     // use operand attributes (containing addressing mode and word size) to decode operands
     let operand1_attr: operandAttributes = struct {
         addressing_method = operand1_addr_method,
@@ -362,8 +367,8 @@ function get_Gv_Ev_operands(instruction_ptr, read_offset, decoded_prefixes) =
 // function to decode a r/m operand for PUSH and POP instructions
 val decode_push_or_pop_rm_operand: (bits(64), int, decodedPrefixes, modRMByte) -> (int, word_size, rm_operand)
 function decode_push_or_pop_rm_operand(instruction_ptr, read_offset, decoded_prefixes, mod_rm_byte) = {
-    // Default operand size is 64 bits for instructions implicitly using the RSP, but can be changed to 16 bits.
-    let wsize = if decoded_prefixes.op_size_override then 16 else 64;
+    // Get wsize. Default wsize is 64 bits. Ignore REX.
+    let wsize = get_wsize_ignoring_REX(decoded_prefixes, 64);
     // Decode operand. Operand addressing method + operand type is Ev
     let (final_offset, operand) = decode_rm_operand_inner(addressingMethod_E, instruction_ptr, read_offset, mod_rm_byte, wsize, decoded_prefixes.REX);
     (final_offset, wsize, operand)

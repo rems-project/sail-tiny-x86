@@ -100,6 +100,12 @@ function clause execute(SFENCE()) = {
     sail_barrier(Barrier_SFENCE)
 }
 
+/*
+function clause decode_three_byte_instruction(0x0FAEF8, instruction_ptr, read_offset, decoded_prefixes) = {
+    // 66 prefix not allowed!
+}
+*/
+
 // Wait_On_Following_Instructions_Until(preceding_instructions_complete);
 function clause execute(LFENCE()) = {
     // apply barrier
@@ -189,7 +195,8 @@ function clause decode_one_byte_instruction(0x6A, instruction_ptr, read_offset, 
 
 // Decode PUSH imm{16, 32}
 function clause decode_one_byte_instruction(0x68, instruction_ptr, read_offset, decoded_prefixes) = {
-    let wsize = if decoded_prefixes.op_size_override then 16 else 32;
+    // Get wsize. Default is 32 bits. Ignore REX prefix as we can't have a 64 bit immediate.
+    let wsize = get_wsize_ignoring_REX(decoded_prefixes, 32);
     let (new_read_offset, imm) = decode_imm_operand(instruction_ptr, read_offset, wsize);
     Some(new_read_offset, PUSH(wsize, rmi_IMM(imm)))
 }
@@ -225,8 +232,8 @@ function clause decode_one_byte_instruction(0x5 @ is_pop: bits(1) @ reg_field: b
     if decoded_prefixes.lock then fail("Exception #UD — Invalid Opcode (Undefined Opcode): PUSH instruction does not support the LOCK prefix");
     // get register location embedded in the opcode
     let reg_index = get_reg_value_in_opcode_byte(reg_field, decoded_prefixes.REX);
-    // get wsize. For PUSH, a reg operand can either be 16 or 64 bits
-    let wsize = if decoded_prefixes.op_size_override then 16 else 64;
+    // get wsize. For PUSH, the default operand size is 64 bits. Ignore REX prefix
+    let wsize = get_wsize_ignoring_REX(decoded_prefixes, 64);
 
     if is_pop == 0b0 then
         Some(read_offset, PUSH(wsize, rmi_REG(reg_index)))
@@ -437,7 +444,9 @@ function clause execute(LEAVE(wsize)) = {
 
 // Decode LEAVE instruction (operand size = 16 or 64 bits)
 function clause decode_one_byte_instruction(0xC9, instruction_ptr, read_offset, decoded_prefixes) = {
-    let wsize = if decoded_prefixes.op_size_override then 16 else 64;
+    // Get wsize. Default wsize is 64 bits. Ignore REX prefix.
+    let wsize = get_wsize_ignoring_REX(decoded_prefixes, 64);
+    assert(wsize == 16 | wsize == 64); // required for type-checking as only LEAVE(16) and LEAVE(64) are allowed instructions
     Some(read_offset, LEAVE(wsize))
 }
 

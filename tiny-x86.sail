@@ -418,6 +418,8 @@ function clause decode_one_byte_instruction(0x2B, instruction_ptr, read_offset, 
     Some(new_read_offset, SUB(decoded_prefixes.lock, wsize, operand1, operand2))
 }
 
+/* IMUL */
+
 function clause execute(IMUL(wsize, dest, src)) = {
     // IMUL cannot occur between 8 bit register or memory locations
     if wsize == 8 then fail("8 bit operands are not valid for operation IMUL");
@@ -438,6 +440,29 @@ function clause execute(IMUL(wsize, dest, src)) = {
     else {
         RFLAGS[CF] = 0b1;
         RFLAGS[OF] = 0b1;
+    }
+}
+
+// Decode IMUL r{16, 32, 64} r/m{16, 32, 64}
+function clause decode_two_byte_instruction(0x0FAF, instruction_ptr, read_offset, decoded_prefixes) = {
+    // Get 2 operands of the addressing method + operand type: Operand 1 = Gv, Operand 2 = Ev
+    let (new_read_offset, wsize, rm_operand1, rmi_operand2) = 
+        get_Gv_Ev_operands(instruction_ptr, read_offset, decoded_prefixes);
+    // 
+    match (rm_operand1, rmi_operand2) {
+        // both operands are registers
+        (rm_REG(reg_index_1), rmi_REG(reg_index_2)) => {
+            Some(new_read_offset, IMUL(wsize, reg_index_1, rm_REG(reg_index_2)))
+        },
+        // operand 1 is a register and operand 2 is a memory location
+        (rm_REG(reg_index), rmi_MEM(mem_loc)) => {
+            Some(new_read_offset, IMUL(wsize, reg_index, rm_MEM(mem_loc)))
+        },
+        // This case should be unreachable
+        _ => {
+            fail("Invalid decoding for IMUL r r/m instruction");
+            None()
+        }
     }
 }
 

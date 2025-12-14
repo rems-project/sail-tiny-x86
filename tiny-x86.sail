@@ -100,11 +100,44 @@ function clause execute(SFENCE()) = {
     sail_barrier(Barrier_SFENCE)
 }
 
-/*
-function clause decode_three_byte_instruction(0x0FAEF8, instruction_ptr, read_offset, decoded_prefixes) = {
-    // 66 prefix not allowed!
+// Decode SFENCE, LFENCE and MFENCE instructions
+function clause decode_two_byte_instruction(0x0FAE, instruction_ptr, read_offset, decoded_prefixes) = {
+    // get opcode extension (located in mod r/m byte)
+    let (new_read_offset, mod_rm_byte) = read_mod_rm_byte(instruction_ptr, read_offset);
+
+    if mod_rm_byte[Mod] == 0b11 then {
+        match mod_rm_byte[REG] {
+            0b111 => {
+                // SFENCE
+                // Use of 66 / F2 / F3 prefixes are not allowed in the instruction. Only prefix 66 has been implemented in this model.
+                if decoded_prefixes.op_size_override then fail("Prefix 66H is not allowed in the SFENCE instruction");
+                Some(new_read_offset, SFENCE())
+            },
+            0b101 => {
+                // LFENCE
+                // Use of 66 / F2 / F3 prefixes are not allowed in the instruction. Only prefix 66 has been implemented in this model.
+                if decoded_prefixes.op_size_override then fail("Prefix 66H is not allowed in the SFENCE instruction");
+                Some(new_read_offset, LFENCE())
+            },
+            0b110 => {
+                // MFENCE
+                // Use of 66 / F2 / F3 prefixes are not allowed in the instruction. Only prefix 66 has been implemented in this model.
+                if decoded_prefixes.op_size_override then fail("Prefix 66H is not allowed in the SFENCE instruction");
+                Some(new_read_offset, MFENCE())
+            },
+            _ => {
+                fail("This instruction decode is either reserved or not implemented in this model");
+                None()
+            }
+        }
+    }
+    else {
+        fail("This instruction decode is not implemented in this model");
+        None()
+    }
 }
-*/
+
+/* LFENCE */
 
 // Wait_On_Following_Instructions_Until(preceding_instructions_complete);
 function clause execute(LFENCE()) = {
@@ -112,11 +145,17 @@ function clause execute(LFENCE()) = {
     sail_barrier(Barrier_LFENCE)
 }
 
+// Decode LFENCE located with Decode SFENCE and MFENCE
+
+/* MFENCE */
+
 // Wait_On_Following_Loads_And_Stores_Until(preceding_loads_and_stores_globally_visible);
 function clause execute(MFENCE()) = {
     // apply barrier
     sail_barrier(Barrier_MFENCE)
 }
+
+// Decode MFENCE located with Decode SFENCE and LFENCE
 
 /* CMP */
 
@@ -510,7 +549,6 @@ end execute
 // Decode cases for opcodes that the model, or x86, does not support
 function clause decode_one_byte_instruction(_, instruction_ptr, read_offset, decoded_prefixes) = None()
 function clause decode_two_byte_instruction(_, instruction_ptr, read_offset, decoded_prefixes) = None()
-function clause decode_three_byte_instruction(_, instruction_ptr, read_offset, decoded_prefixes) = None()
 
 end decode_one_byte_instruction
 end decode_two_byte_instruction

@@ -385,10 +385,6 @@ scattered function decode_one_byte_instruction
 val decode_two_byte_instruction: (bits(16), bits(64), int, decodedPrefixes) -> option((int, ast))
 scattered function decode_three_byte_instruction
 
-// function to decode three byte instructions. Function definitions are inlined with corresponding execute definitions
-val decode_three_byte_instruction: (bits(24), bits(64), int, decodedPrefixes) -> option((int, ast))
-scattered function decode_three_byte_instruction
-
 // function to decode the main instruction
 // returns the new read offset, an incomplete AST entry, and a struct of optional instruction parts we now know to exist
 val decode_instruction: (bits(64), int, decodedPrefixes) -> option((int, ast))
@@ -407,14 +403,6 @@ function decode_instruction(instruction_ptr, read_offset, decoded_prefixes) = {
         let two_byte_opcode = one_byte_opcode @ read_memory(1, instruction_ptr + new_read_offset, create_iFetchAccessDescriptor());
         new_read_offset = new_read_offset + 1;
         res = decode_two_byte_instruction(two_byte_opcode, instruction_ptr, new_read_offset, decoded_prefixes);
-
-        // If the first 2 bytes of the opcode could not be decoded
-        if res == None() then {
-            /* See if our opcode is three bytes long. If so, decode the instruction */
-            let three_byte_opcode = two_byte_opcode @ read_memory(1, instruction_ptr + new_read_offset, create_iFetchAccessDescriptor());
-            new_read_offset = new_read_offset + 1;
-            res = decode_three_byte_instruction(three_byte_opcode, instruction_ptr, new_read_offset, decoded_prefixes);
-        };
     };
 
     res

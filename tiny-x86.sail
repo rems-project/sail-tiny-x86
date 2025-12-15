@@ -54,12 +54,13 @@ function clause decode_one_byte_instruction(0x8B, instruction_ptr, read_offset, 
 function clause decode_one_byte_instruction(0xB @ 0b1 @ reg_field, instruction_ptr, read_offset, decoded_prefixes) = {
     // get register location embedded in the opcode
     let reg_index = get_reg_value_in_opcode_byte(reg_field, decoded_prefixes.REX);
+    let reg = REG_NORMAL(reg_index);
     // Get operand_size. Default is 32 bits.
     let operand_size = get_operand_size_using_REX(decoded_prefixes, 32);
     // get imm operand
     let (new_read_offset, imm) = read_imm_operand(instruction_ptr, read_offset, operand_size);
     // return new read offset and decoded instruction
-    Some(new_read_offset, MOV(operand_size, rm_REG(reg_index), rmi_IMM(imm)))
+    Some(new_read_offset, MOV(operand_size, rm_REG(reg), rmi_IMM(imm)))
 }
 
 // Decode MOV r/m{16, 32, 64} imm{16, 32, 32}
@@ -332,13 +333,14 @@ function clause decode_one_byte_instruction(0xFF, instruction_ptr, read_offset, 
 function clause decode_one_byte_instruction(0x5 @ is_pop: bits(1) @ reg_field: bits(3), instruction_ptr, read_offset, decoded_prefixes) = {
     // get register location embedded in the opcode
     let reg_index = get_reg_value_in_opcode_byte(reg_field, decoded_prefixes.REX);
+    let reg = REG_NORMAL(reg_index);
     // get operand size. For PUSH, the default operand size is 64 bits. Ignore REX prefix
     let operand_size = get_operand_size_ignoring_REX(decoded_prefixes, 64);
 
     if is_pop == 0b0 then
-        Some(read_offset, PUSH(operand_size, rmi_REG(reg_index)))
+        Some(read_offset, PUSH(operand_size, rmi_REG(reg)))
     else
-        Some(read_offset, POP(operand_size, rm_REG(reg_index)))
+        Some(read_offset, POP(operand_size, rm_REG(reg)))
 }
 
 /* POP */
@@ -490,12 +492,13 @@ function clause execute(IMUL(operand_size, dest, src)) = {
     if operand_size == 8 then fail("8 bit operands are not valid for operation IMUL");
 
     // execute IMUL
-    let dest_val = read_GPR(operand_size, dest);
+    let wrapped_dest = REG_NORMAL(dest);
+    let dest_val = read_GPR(operand_size, wrapped_dest);
     let src_val = read_operand(operand_size, src);
     let result_int = signed(dest_val) * signed(src_val);
     let result_128 = get_slice_int(operand_size * 2, result_int, 0);
     let result = result_128[operand_size - 1 .. 0];
-    write_GPR(operand_size, dest, result);
+    write_GPR(operand_size, wrapped_dest, result);
 
     // set carry and overflow flag if the result overflows the allocated space (operand_size bits), else clear
     if sail_sign_extend(result, operand_size * 2) == result_128 then {
@@ -516,11 +519,11 @@ function clause decode_two_byte_instruction(0x0FAF, instruction_ptr, read_offset
     // 
     match (rm_operand1, rmi_operand2) {
         // both operands are registers
-        (rm_REG(reg_index_1), rmi_REG(reg_index_2)) => {
-            Some(new_read_offset, IMUL(operand_size, reg_index_1, rm_REG(reg_index_2)))
+        (rm_REG(REG_NORMAL(reg_index_1)), rmi_REG(reg_2)) => {
+            Some(new_read_offset, IMUL(operand_size, reg_index_1, rm_REG(reg_2)))
         },
         // operand 1 is a register and operand 2 is a memory location
-        (rm_REG(reg_index), rmi_MEM(mem_loc)) => {
+        (rm_REG(REG_NORMAL(reg_index)), rmi_MEM(mem_loc)) => {
             Some(new_read_offset, IMUL(operand_size, reg_index, rm_MEM(mem_loc)))
         },
         // This case should be unreachable
@@ -566,7 +569,7 @@ function clause execute(LEAVE(operand_size)) = {
     // pop value from the stack
     let popped_value = read_operand(operand_size, rm_MEM(RSP));
     // store popped value in RBP
-    write_GPR(operand_size, 5, popped_value);
+    write_GPR(operand_size, REG_NORMAL(5), popped_value);
     // increment stack pointer to free the popped stack space
     RSP = RSP + (operand_size / 8);
 }

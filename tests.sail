@@ -10,24 +10,24 @@ function write_then_read_mem() -> unit = {
 
 function mov_reg_to_mem() -> unit = {
   let operand_size = 16;
-  write_GPR(operand_size, 8, get_slice_int(operand_size, -236, 0));
-  execute(MOV(operand_size, rm_MEM(0xFFFF_FFFF_FFFF_FFF8), rmi_REG(8)));
+  write_GPR(operand_size, REG_NORMAL(8), get_slice_int(operand_size, -236, 0));
+  execute(MOV(operand_size, rm_MEM(0xFFFF_FFFF_FFFF_FFF8), rmi_REG(REG_NORMAL(8))));
   assert(signed(read_operand(operand_size, rm_MEM(0xFFFF_FFFF_FFFF_FFF8))) == -236, "MOV(mem, reg) gave an incorrect answer")
 }
 
 function xor_2_numbers() -> unit = {
   let lock = false;
   let operand_size1 = 64;
-  write_GPR(operand_size1, 8, 0x0101_0101_0101_0101);
+  write_GPR(operand_size1, REG_NORMAL(8), 0x0101_0101_0101_0101);
   let imm_val = 0x0000_1111;
-  execute(XOR(lock, operand_size1, rm_REG(8), rmi_IMM(IMM32(imm_val))));
-  assert(read_GPR(operand_size1, 8) == 0x0101_0101_0101_1010, "XOR(reg, imm) gave an incorrect answer")
+  execute(XOR(lock, operand_size1, rm_REG(REG_NORMAL(8)), rmi_IMM(IMM32(imm_val))));
+  assert(read_GPR(operand_size1, REG_NORMAL(8)) == 0x0101_0101_0101_1010, "XOR(reg, imm) gave an incorrect answer")
 }
 
 function cmp_jns() -> unit = {
   // cmp test
-  write_GPR(32, 0, 0x4444_4444);
-  execute(CMP(32, rm_REG(0), rmi_IMM(IMM32(0x5555_5555))));
+  write_GPR(32, REG_NORMAL(0), 0x4444_4444);
+  execute(CMP(32, rm_REG(REG_NORMAL(0)), rmi_IMM(IMM32(0x5555_5555))));
   assert(RFLAGS[SF] == 1, "CMP does not set sign flag correctly");
   // jns test
   let current_RIP = RIP;
@@ -46,37 +46,37 @@ function push_pop() -> unit = {
   assert(RSP + 8 == RSP1, "PUSH does not correctly change stack pointer");
   assert(read_operand(64, rm_MEM(RSP)) == sail_sign_extend(0xF0F0, 64), "PUSH does not push the correct value to the top of the stack");
   // pop test
-  execute(POP(64, rm_REG(15)));
+  execute(POP(64, rm_REG(REG_NORMAL(15))));
   assert(RSP == RSP1, "POP does not correctly change stack pointer");
-  assert(read_GPR(64, 15) == sail_sign_extend(0xF0F0, 64), "POP does not put the correct value in the destination")
+  assert(read_GPR(64, REG_NORMAL(15)) == sail_sign_extend(0xF0F0, 64), "POP does not put the correct value in the destination")
 }
 
 function add_2_numbers() -> unit = {
   let lock = false;
   let operand_size1 = 64;
   let operand_size2 = 32;
-  write_GPR(operand_size1, 8, get_slice_int(operand_size1, 30, 0));
+  write_GPR(operand_size1, REG_NORMAL(8), get_slice_int(operand_size1, 30, 0));
   let imm_val = get_slice_int(operand_size2, -250, 0);
-  execute(ADD(lock, operand_size1, rm_REG(8), rmi_IMM(IMM32(imm_val))));
-  assert(signed(read_GPR(operand_size1, 8)) == 30 - 250, "ADD(reg, imm) gave an incorrect answer")
+  execute(ADD(lock, operand_size1, rm_REG(REG_NORMAL(8)), rmi_IMM(IMM32(imm_val))));
+  assert(signed(read_GPR(operand_size1, REG_NORMAL(8))) == 30 - 250, "ADD(reg, imm) gave an incorrect answer")
 }
 
 function subtract_2_numbers() -> unit = {
   let lock = false;
   let operand_size1 = 64;
   let operand_size2 = 32;
-  write_GPR(operand_size1, 8, get_slice_int(operand_size1, 30, 0));
+  write_GPR(operand_size1, REG_NORMAL(8), get_slice_int(operand_size1, 30, 0));
   let imm_val = get_slice_int(operand_size2, -250, 0);
-  execute(SUB(lock, operand_size1, rm_REG(8), rmi_IMM(IMM32(imm_val))));
-  assert(signed(read_GPR(operand_size1, 8)) == 30 - (- 250), "SUB(reg, imm) gave an incorrect answer");
+  execute(SUB(lock, operand_size1, rm_REG(REG_NORMAL(8)), rmi_IMM(IMM32(imm_val))));
+  assert(signed(read_GPR(operand_size1, REG_NORMAL(8))) == 30 - (- 250), "SUB(reg, imm) gave an incorrect answer");
 }
 
 function multiply_2_numbers() -> unit = {
   let operand_size = 16;
-  write_GPR(operand_size, 8, get_slice_int(operand_size, 30, 0));
-  write_GPR(operand_size, 9, get_slice_int(operand_size, -250, 0));
-  execute(IMUL(operand_size, 8, rm_REG(9)));
-  assert(signed(read_GPR(operand_size, 8)) == 30 * (- 250), "IMUL(reg, reg) gave an incorrect answer");
+  write_GPR(operand_size, REG_NORMAL(8), get_slice_int(operand_size, 30, 0));
+  write_GPR(operand_size, REG_NORMAL(9), get_slice_int(operand_size, -250, 0));
+  execute(IMUL(operand_size, 8, rm_REG(REG_NORMAL(9))));
+  assert(signed(read_GPR(operand_size, REG_NORMAL(8))) == 30 * (- 250), "IMUL(reg, reg) gave an incorrect answer");
 }
 
 function call_leave_ret() -> unit = {
@@ -94,9 +94,9 @@ function call_leave_ret() -> unit = {
   let old_RBP = RBP;
   let old_RSP = RSP;
   // push RBP value to the stack
-  execute(PUSH(64, rmi_REG(5))); // 5 is the reg_index for RBP
+  execute(PUSH(64, rmi_REG(REG_NORMAL(5)))); // 5 is the reg_index for RBP
   // copy RSP value into RBP register
-  execute(MOV(64, rm_REG(5), rmi_REG(4))); // 4 is the reg_index for RSP, 5 for RBP
+  execute(MOV(64, rm_REG(REG_NORMAL(5)), rmi_REG(REG_NORMAL(4)))); // 4 is the reg_index for RSP, 5 for RBP
 
   // leave test
   execute(LEAVE(64));
@@ -147,7 +147,7 @@ function decode_mov_rm32_r32() -> unit = {
   let instruction: bits(16) = 0x89 @ 0b11_100_101;
   write_instruction_to_memory(instruction, RIP);
   let (new_rip, decoded_instruction) = decode(RIP);
-  assert(decoded_instruction == MOV(32, rm_REG(5), rmi_REG(4)), "MOV(32, rm32, r32) instruction not decoded properly");
+  assert(decoded_instruction == MOV(32, rm_REG(REG_NORMAL(5)), rmi_REG(REG_NORMAL(4))), "MOV(32, rm32, r32) instruction not decoded properly");
 }
 
 function decode_mov_r64_rm64() -> unit = {
@@ -155,10 +155,10 @@ function decode_mov_r64_rm64() -> unit = {
   let old_rip = RIP;
   let instruction: bits(24) = 0b0100_1101 @ 0x8B @ 0b00_100_101;
   write_instruction_to_memory(instruction, RIP);
-  write_GPR(64, 5 + 8, 0xFEDC_BA98_7654_3210);
-  let expected_rmi_MEM = read_GPR(64, 5 + 8);
+  write_GPR(64, REG_NORMAL(5 + 8), 0xFEDC_BA98_7654_3210);
+  let expected_rmi_MEM = read_GPR(64, REG_NORMAL(5 + 8));
   let (new_rip, decoded_instruction) = decode(RIP);
-  assert(decoded_instruction == MOV(64, rm_REG(4 + 8), rmi_MEM(expected_rmi_MEM)), "MOV(64, r64, rm64) instruction not decoded properly");
+  assert(decoded_instruction == MOV(64, rm_REG(REG_NORMAL(4 + 8)), rmi_MEM(expected_rmi_MEM)), "MOV(64, r64, rm64) instruction not decoded properly");
 }
 
 function decode_push_imm16() -> unit = {
@@ -177,12 +177,12 @@ function decode_push_imm16() -> unit = {
 function decode_push_m64() -> unit = {
   // Testing that PUSH MEM64([RDI] + 0xFF (sign-extended)) is decoded correctly
   // Write to RDI
-  write_GPR(64, 7, 0x1234_5678_9ABC_DEF0);
+  write_GPR(64, REG_NORMAL(7), 0x1234_5678_9ABC_DEF0);
   // Write instruction to memory. Instruction consists of opcode, mod r/m byte, then 8-bit displacement
   let instruction: bits(24) = 0xFF @ 0b01_110_111 @ 0xFF;
   write_instruction_to_memory(instruction, RIP);
   // Calculate expected memory address ([RDI] + 0xFF (sign-extended))
-  let expected_mem_address = add_bits(read_GPR(64, 7), sail_sign_extend(0xFF, 64));
+  let expected_mem_address = add_bits(read_GPR(64, REG_NORMAL(7)), sail_sign_extend(0xFF, 64));
   // Decode and test
   let (new_rip, decoded_instruction) = decode(RIP);
   assert(decoded_instruction == PUSH(64, rmi_MEM(expected_mem_address)), "PUSH(64, m64) instruction not decoded properly");
@@ -195,7 +195,7 @@ function decode_push_r16() -> unit = {
   write_instruction_to_memory(instruction, RIP);
   // Decode and test
   let (new_rip, decoded_instruction) = decode(RIP);
-  assert(decoded_instruction == PUSH(16, rmi_REG(8)), "PUSH(16, r16) instruction not decoded properly")
+  assert(decoded_instruction == PUSH(16, rmi_REG(REG_NORMAL(8))), "PUSH(16, r16) instruction not decoded properly")
 }
 
 function decode_pop_r16() -> unit = {
@@ -205,7 +205,7 @@ function decode_pop_r16() -> unit = {
   write_instruction_to_memory(instruction, RIP);
   // Decode and test
   let (new_rip, decoded_instruction) = decode(RIP);
-  assert(decoded_instruction == POP(16, rm_REG(6)), "POP(16, r16) not decoded properly")
+  assert(decoded_instruction == POP(16, rm_REG(REG_NORMAL(6))), "POP(16, r16) not decoded properly")
 }
 
 function decode_pop_r64() -> unit = {
@@ -215,7 +215,7 @@ function decode_pop_r64() -> unit = {
   write_instruction_to_memory(instruction, RIP);
   // Decode and test
   let (new_rip, decoded_instruction) = decode(RIP);
-  assert(decoded_instruction == POP(64, rm_REG(0)), "POP(64, r64) not decoded properly")
+  assert(decoded_instruction == POP(64, rm_REG(REG_NORMAL(0))), "POP(64, r64) not decoded properly")
 }
 
 function test_decode() -> unit = {

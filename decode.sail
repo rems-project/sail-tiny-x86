@@ -176,11 +176,11 @@ function decode_sib_byte(sib_byte, REX) = {
     let sib_byte_INDEX = get_sib_byte_INDEX(sib_byte, REX);
     let base = if sib_byte_BASE == 5 then sail_zero_extend(0x0, 64) else {
         // base = value stored in this register location
-        read_GPR(64, sib_byte_BASE)
+        read_GPR(64, REG_NORMAL(sib_byte_BASE))
     };
     let index = if sib_byte_INDEX == 4 then sail_zero_extend(0x0, 64) else {
         // index = value stored in this register location
-        read_GPR(64, sib_byte_INDEX)
+        read_GPR(64, REG_NORMAL(sib_byte_INDEX))
     };
     // return the value stored in the SIB byte, which is base + index * (2^scale)
     add_bits(base, sail_shiftleft(index, unsigned(sib_byte[Scale])))
@@ -227,19 +227,29 @@ function read_imm_operand(instruction_ptr, read_offset, operand_size) = {
     (read_offset + operand_size_bytes, wrapped_imm)
 }
 
+val wrap_reg: (reg_index, operand_size, REX) -> reg
+function wrap_reg(reg_index, operand_size, REX) = {
+    if operand_size == 8 & REX.bits == 0x00 then
+        REG_HIGH_BYTE_ENABLED(reg_index)
+    else
+        REG_NORMAL(reg_index)
+}
+
 // function to decode single r/m operand, given the mod_rm_byte
 // returns the new read offset and the operand
-val decode_rm_operand_inner: (addressingMethod, bits(64), int, modRMByte, REX) -> (int, rm_operand)
+val decode_rm_operand_inner: (addressingMethod, bits(64), int, modRMByte, operand_size, REX) -> (int, rm_operand)
 scattered function decode_rm_operand_inner
 
 /* function definition for addressing method E:
  of the mod r/m byte, the mod bits and r/m bits determine the operand */
-function clause decode_rm_operand_inner(addressingMethod_E, instruction_ptr, read_offset, mod_rm_byte, REX) = {
+function clause decode_rm_operand_inner(addressingMethod_E, instruction_ptr, read_offset, mod_rm_byte, operand_size, REX) = {
     // read r/m bits (returns register index)
     let reg_used: reg_index = get_mod_rm_byte_RM(mod_rm_byte, REX);
+
     if mod_rm_byte[Mod] == 0b11 then 
         // the r/m bits specify the register index of the operand
-        (read_offset, rm_REG(reg_used))
+        let wrapped_reg = wrap_reg(reg_used, operand_size, REX) in
+        (read_offset, rm_REG(wrapped_reg))
     else {
         // the mod and r/m bits are used to specify a memory location
         var new_read_offset: int = read_offset;
@@ -260,7 +270,7 @@ function clause decode_rm_operand_inner(addressingMethod_E, instruction_ptr, rea
                 sib_value
             }
             // else working value is set to the value stored in the register index that we read earlier
-            else read_GPR(64, reg_used)
+            else read_GPR(64, REG_NORMAL(reg_used))
         };
         match mod_rm_byte[Mod] {
             0b01 => {
@@ -292,20 +302,21 @@ function clause decode_rm_operand_inner(addressingMethod_E, instruction_ptr, rea
 
 /* function definition for addressing method E:
  of the mod r/m byte, the reg bits determine the register index of the operand */
-function clause decode_rm_operand_inner(addressingMethod_G, instruction_ptr, read_offset, mod_rm_byte, REX) = {
+function clause decode_rm_operand_inner(addressingMethod_G, instruction_ptr, read_offset, mod_rm_byte, operand_size, REX) = {
     // read reg bits of the mod r/m byte
     let reg_index = get_mod_rm_byte_REG(mod_rm_byte, REX) in
+    let wrapped_reg = wrap_reg(reg_index, operand_size, REX) in
     // return the read offset and decoded operand
-    (read_offset, rm_REG(reg_index))
+    (read_offset, rm_REG(wrapped_reg))
 }
 
 // function to decode 2 register or memory operands
 // returns the new read offset, operand1, and operand2
-val decode_2_rm_operands: (bits(64), int, addressingMethod, addressingMethod, REX) -> (int, rm_operand, rmi_operand)
-function decode_2_rm_operands(instruction_ptr, read_offset, operand1_addr_method, operand2_addr_method, REX) = {
+val decode_2_rm_operands: (bits(64), int, addressingMethod, addressingMethod, operand_size, REX) -> (int, rm_operand, rmi_operand)
+function decode_2_rm_operands(instruction_ptr, read_offset, operand1_addr_method, operand2_addr_method, operand_size, REX) = {
     let (new_offset, mod_rm_byte) = read_mod_rm_byte(instruction_ptr, read_offset);
-    let (new_offset2, operand1) = decode_rm_operand_inner(operand1_addr_method, instruction_ptr, new_offset, mod_rm_byte, REX);
-    let (new_offset3, working_operand2) = decode_rm_operand_inner(operand2_addr_method, instruction_ptr, new_offset2, mod_rm_byte, REX);
+    let (new_offset2, operand1) = decode_rm_operand_inner(operand1_addr_method, instruction_ptr, new_offset, mod_rm_byte, operand_size, REX);
+    let (new_offset3, working_operand2) = decode_rm_operand_inner(operand2_addr_method, instruction_ptr, new_offset2, mod_rm_byte, operand_size, REX);
     let operand2: rmi_operand = match working_operand2 {
         rm_REG(value) => rmi_REG(value),
         rm_MEM(value) => rmi_MEM(value)
@@ -320,7 +331,7 @@ function get_Ev_Gv_operands(instruction_ptr, read_offset, decoded_prefixes) = {
     let operand_size = get_operand_size_using_REX(decoded_prefixes, 32);
     // decode operands
     let (new_read_offset, operand1, operand2) = 
-        decode_2_rm_operands(instruction_ptr, read_offset, addressingMethod_E, addressingMethod_G, decoded_prefixes.REX);
+        decode_2_rm_operands(instruction_ptr, read_offset, addressingMethod_E, addressingMethod_G, operand_size, decoded_prefixes.REX);
     (new_read_offset, operand_size, operand1, operand2)
 }
 
@@ -331,7 +342,7 @@ function get_Gv_Ev_operands(instruction_ptr, read_offset, decoded_prefixes) = {
     let operand_size = get_operand_size_using_REX(decoded_prefixes, 32);
     // decode operands
     let (new_read_offset, operand1, operand2) = 
-        decode_2_rm_operands(instruction_ptr, read_offset, addressingMethod_G, addressingMethod_E, decoded_prefixes.REX);
+        decode_2_rm_operands(instruction_ptr, read_offset, addressingMethod_G, addressingMethod_E, operand_size, decoded_prefixes.REX);
     (new_read_offset, operand_size, operand1, operand2)
 }
 
@@ -339,13 +350,13 @@ function get_Gv_Ev_operands(instruction_ptr, read_offset, decoded_prefixes) = {
 // Operand type is b, which means that the operand size is 8 bits. So we don't need to return this information
 val get_Eb_Gb_operands: (bits(64), int, REX) -> (int, rm_operand, rmi_operand)
 function get_Eb_Gb_operands(instruction_ptr, read_offset, REX) = 
-    decode_2_rm_operands(instruction_ptr, read_offset, addressingMethod_E, addressingMethod_G, REX)
+    decode_2_rm_operands(instruction_ptr, read_offset, addressingMethod_E, addressingMethod_G, 8, REX)
 
 // Get 2 operands of the addressing method + operand type: Operand 1 = Gb, Operand 2 = Eb
 // Operand type is b, which means that the operand size is 8 bits. So we don't need to return this information
 val get_Gb_Eb_operands: (bits(64), int, REX) -> (int, rm_operand, rmi_operand)
 function get_Gb_Eb_operands(instruction_ptr, read_offset, REX) = 
-    decode_2_rm_operands(instruction_ptr, read_offset, addressingMethod_G, addressingMethod_E, REX)
+    decode_2_rm_operands(instruction_ptr, read_offset, addressingMethod_G, addressingMethod_E, 8, REX)
 
 // function to decode a r/m operand for PUSH and POP instructions
 val decode_push_or_pop_rm_operand: (bits(64), int, decodedPrefixes, modRMByte) -> (int, operand_size, rm_operand)
@@ -353,7 +364,7 @@ function decode_push_or_pop_rm_operand(instruction_ptr, read_offset, decoded_pre
     // Get operand size. Default operand size is 64 bits. Ignore REX.
     let operand_size = get_operand_size_ignoring_REX(decoded_prefixes, 64);
     // Decode operand. Operand addressing method + operand type is Ev
-    let (final_offset, operand) = decode_rm_operand_inner(addressingMethod_E, instruction_ptr, read_offset, mod_rm_byte, decoded_prefixes.REX);
+    let (final_offset, operand) = decode_rm_operand_inner(addressingMethod_E, instruction_ptr, read_offset, mod_rm_byte, operand_size, decoded_prefixes.REX);
     (final_offset, operand_size, operand)
 }
 
@@ -363,7 +374,7 @@ function get_Ev_Iz_operands(instruction_ptr, read_offset, decoded_prefixes, mod_
     // Get operand size. Default is 32 bits.
     let operand_size = get_operand_size_using_REX(decoded_prefixes, 32);
     // Get r/m operand
-    let (read_offset_2, operand1) = decode_rm_operand_inner(addressingMethod_E, instruction_ptr, read_offset, mod_rm_byte, decoded_prefixes.REX);
+    let (read_offset_2, operand1) = decode_rm_operand_inner(addressingMethod_E, instruction_ptr, read_offset, mod_rm_byte, operand_size, decoded_prefixes.REX);
     // Get imm operand
     let imm_size = if operand_size == 64 then 32 else operand_size;
     let (read_offset_3, imm) = read_imm_operand(instruction_ptr, read_offset_2, imm_size);

@@ -42,6 +42,35 @@ function clause decode_one_byte_instruction(0x8B, instruction_ptr, read_offset, 
     Some(new_read_offset, MOV(wsize, operand1, operand2))
 }
 
+// Decode MOV r{16, 32, 64} imm{16, 32, 64}
+function clause decode_one_byte_instruction(0xB @ 0b1 @ reg_field, instruction_ptr, read_offset, decoded_prefixes) = {
+    // get register location embedded in the opcode
+    let reg_index = get_reg_value_in_opcode_byte(reg_field, decoded_prefixes.REX);
+    // Get wsize. Default is 32 bits.
+    let wsize = get_wsize_using_REX(decoded_prefixes, 32);
+    // get imm operand
+    let (new_read_offset, imm) = decode_imm_operand(instruction_ptr, read_offset, wsize);
+    // return new read offset and decoded instruction
+    Some(new_read_offset, MOV(wsize, rm_REG(reg_index), rmi_IMM(imm)))
+}
+
+// Decode MOV r/m{16, 32, 64} imm{16, 32, 32}
+/* WARNING: Opcode C7 encodes a group of instructions. The exact instruction encoded is specified in the reg field of the mod r/m byte.
+Out of all instructions with opcode C7, we currently only support the MOV instruction. */
+function clause decode_one_byte_instruction(0xC7, instruction_ptr, read_offset, decoded_prefixes) = {
+    // fetch mod r/m byte
+    let (read_offset_2, mod_rm_byte) = read_mod_rm_byte(instruction_ptr, read_offset);
+
+    // If the opcode extension does not point to a MOV instruction then fail
+    if unsigned(mod_rm_byte[REG]) != 0 then fail("The instruction to be decoded is either reserved or not implemented in this model");
+
+    // Get 2 operands of the addressing method + operand type: Operand 1 = Ev, Operand 2 = Iz
+    let (new_read_offset, wsize, operand1, imm) = get_Ev_Iz_operands(instruction_ptr, read_offset, decoded_prefixes, mod_rm_byte);
+
+    // return new read offset and decoded instruction
+    Some(new_read_offset, MOV(wsize, operand1, rmi_IMM(imm)))
+}
+
 /* XOR */
 
 function clause execute(XOR(lock, wsize, dest, src)) = {
@@ -90,6 +119,30 @@ function clause decode_one_byte_instruction(0x33, instruction_ptr, read_offset, 
     let (new_read_offset, wsize, operand1, operand2) = get_Gv_Ev_operands(instruction_ptr, read_offset, decoded_prefixes);
     // return new read offset and decoded instruction
     Some(new_read_offset, XOR(decoded_prefixes.lock, wsize, operand1, operand2))
+}
+
+// Decode XOR, ADD, SUB, CMP r/m{16, 32, 64} imm{16, 32, 32}
+/* WARNING: Opcode 81 encodes a group of instructions. The exact instruction encoded is specified in the reg field of the mod r/m byte.
+Out of all instructions with opcode 81, we currently only support the ADD, SUB, XOR and CMP instructions. */
+function clause decode_one_byte_instruction(0x81, instruction_ptr, read_offset, decoded_prefixes) = {
+    // fetch mod r/m byte
+    let (read_offset_2, mod_rm_byte) = read_mod_rm_byte(instruction_ptr, read_offset);
+
+    // Get 2 operands of the addressing method + operand type: Operand 1 = Ev, Operand 2 = Iz
+    let (new_read_offset, wsize, operand1, imm) = get_Ev_Iz_operands(instruction_ptr, read_offset, decoded_prefixes, mod_rm_byte);
+    
+    // Match to instruction based on opcode extension.
+    // Return new read offset and decoded instruction
+    match unsigned(mod_rm_byte[REG]) {
+        0 => Some(new_read_offset, ADD(decoded_prefixes.lock, wsize, operand1, rmi_IMM(imm))),
+        5 => Some(new_read_offset, SUB(decoded_prefixes.lock, wsize, operand1, rmi_IMM(imm))),
+        6 => Some(new_read_offset, XOR(decoded_prefixes.lock, wsize, operand1, rmi_IMM(imm))),
+        7 => Some(new_read_offset, CMP(wsize, operand1, rmi_IMM(imm))),
+        _ => {
+            fail("The instruction to be decoded is not implemented in this model");
+            None()
+        }
+    }
 }
 
 /* SFENCE */
@@ -204,6 +257,8 @@ function clause decode_one_byte_instruction(0x3B, instruction_ptr, read_offset, 
     Some(new_read_offset, CMP(wsize, operand1, operand2))
 }
 
+// Decode CMP r/m{16, 32, 64} imm{16, 32, 32} is located in the XOR section
+
 /* PUSH */
 
 function clause execute(PUSH(wsize, src)) = {
@@ -267,8 +322,6 @@ function clause decode_one_byte_instruction(0xFF, instruction_ptr, read_offset, 
 
 // Decode PUSH r{16, 64} and POP r{16, 64}
 function clause decode_one_byte_instruction(0x5 @ is_pop: bits(1) @ reg_field: bits(3), instruction_ptr, read_offset, decoded_prefixes) = {
-    // fail if lock prefix is set, as PUSH does not support this
-    if decoded_prefixes.lock then fail("Exception #UD — Invalid Opcode (Undefined Opcode): PUSH instruction does not support the LOCK prefix");
     // get register location embedded in the opcode
     let reg_index = get_reg_value_in_opcode_byte(reg_field, decoded_prefixes.REX);
     // get wsize. For PUSH, the default operand size is 64 bits. Ignore REX prefix
@@ -365,6 +418,8 @@ function clause decode_one_byte_instruction(0x03, instruction_ptr, read_offset, 
     Some(new_read_offset, ADD(decoded_prefixes.lock, wsize, operand1, operand2))
 }
 
+// Decode ADD r/m{16, 32, 64} imm{16, 32, 32} is located in the XOR section
+
 /* SUB */
 
 function clause execute(SUB(lock, wsize, dest, src)) = {
@@ -417,6 +472,8 @@ function clause decode_one_byte_instruction(0x2B, instruction_ptr, read_offset, 
     // return new read offset and decoded instruction
     Some(new_read_offset, SUB(decoded_prefixes.lock, wsize, operand1, operand2))
 }
+
+// Decode SUB r/m{16, 32, 64} imm{16, 32, 32} is located in the XOR section
 
 /* IMUL */
 

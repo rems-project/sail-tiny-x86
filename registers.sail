@@ -1,6 +1,12 @@
 /* range of registers that one can refer to */
 type reg_index = range(0, 15)
 
+// operand representation of register locations
+union reg = {
+    REG_HIGH_BYTE_ENABLED: reg_index,
+    REG_NORMAL: reg_index
+}
+
 /* program counter */
 
 register RIP: bits(64)
@@ -57,24 +63,61 @@ bitfield rflags : bits(64) = {
 register RFLAGS: rflags
 
 /* read and write least-significant 8,16,32,64 (32 with 0 extend for write) bits */
- val read_GPR: forall 'm, 'm in {8, 16, 32, 64}. (int('m), reg_index) -> bits('m)
+ val read_GPR: forall 'm, 'm in {8, 16, 32, 64}. (int('m), reg) -> bits('m)
 
- function read_GPR(operand_size, i: reg_index) = {
-    let reg = *GPRs[i];
-    reg[operand_size - 1 .. 0]
+ function read_GPR(operand_size, reg) = {
+    match reg {
+        // read lowest operand_size bits from register
+        REG_NORMAL(i) => {
+            let reg = *GPRs[i];
+            reg[operand_size - 1 .. 0]
+        },
+        // read 8 bits from register. Read high byte depending on reg_index (i)
+        REG_HIGH_BYTE_ENABLED(i) => {
+            assert(operand_size == 8, "Register is high byte enabled but operand size is not 8 bits");
+            if i >= 4 & i <= 7 then {
+                // Read high byte register
+                // AH = RAX[15 .. 8], CH = RCX[15 .. 8], DH = RDX[15 .. 8], BH = RBX[15 .. 8]
+                let reg = *GPRs[i - 4];
+                (*GPRs[i - 4])[15 .. 8]
+            }
+            else {
+                let reg = *GPRs[i];
+                reg[7 .. 0]
+            }
+        }
+    }
 }
 
-val write_GPR: forall 'm, 'm in {8, 16, 32, 64}. (int('m), reg_index, bits('m)) -> unit
+val write_GPR: forall 'm, 'm in {8, 16, 32, 64}. (int('m), reg, bits('m)) -> unit
 
-function write_GPR(operand_size, i: reg_index, value) = {
-    if operand_size == 32 then {
-        // if writing 32 bits to a register, the value to be written is zero-extended to 64 bits
-        (*GPRs[i])[63 .. 32] = 0x0000_0000;
-        (*GPRs[i])[31 .. 0] = value;
+function write_GPR(operand_size, reg, value) = {
+    match reg {
+        // write to the lowest 8 or 16 bits of a register, or write 32 or 64 bits to a register
+        REG_NORMAL(i) => {
+            if operand_size == 32 then {
+                // if writing 32 bits to a register, the value to be written is zero-extended to 64 bits
+                (*GPRs[i])[63 .. 32] = 0x0000_0000;
+                (*GPRs[i])[31 .. 0] = value;
+            }
+            else
+                // the value is written to the last operand_size bits of the register
+                (*GPRs[i])[operand_size - 1 .. 0] = value;
+        },
+        // write 8 bits to a register. Write to low or high byte depending on reg_index (i)
+        REG_HIGH_BYTE_ENABLED(i) => {
+            assert(operand_size == 8, "Register is high byte enabled but operand size is not 8 bits");
+            if i >= 4 & i <= 7 then {
+                // Write to high byte register
+                // AH = RAX[15 .. 8], CH = RCX[15 .. 8], DH = RDX[15 .. 8], BH = RBX[15 .. 8]
+                (*GPRs[i - 4])[15 .. 8] = value;
+            }
+            else {
+                // the value is written to the last 8 bits of the register
+                (*GPRs[i])[7 .. 0] = value;
+            }
+        }
     }
-    else
-        // the value is written to the last operand_size bits of the register
-        (*GPRs[i])[operand_size - 1 .. 0] = value;
 }
 
 /* change the value of the parity flag depending on the result of an operation */

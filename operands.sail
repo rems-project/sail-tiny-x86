@@ -16,13 +16,13 @@ union imm = {
 /* union types for operand */
 // register or memory operand
 union rm_operand = {
-    rm_REG: reg_index,
+    rm_REG: reg,
     rm_MEM: mem_addr
 }
 // register, memory, or immediate operand
 union rmi_operand = {
     rmi_IMM: imm,
-    rmi_REG: reg_index,
+    rmi_REG: reg,
     rmi_MEM: mem_addr
 }
 
@@ -57,7 +57,7 @@ function read_imm(operand_size, imm) = {
 val read_rm_operand_with_lock: forall 'operand_size, 'operand_size in {8, 16, 32, 64}. (bool, int('operand_size), rm_operand) -> bits('operand_size)
 function read_rm_operand_with_lock(lock, operand_size, operand) = {
     match operand {
-        rm_REG(reg_index) => read_GPR(operand_size, reg_index),
+        rm_REG(reg) => read_GPR(operand_size, reg),
         rm_MEM(mem_addr) => {
             let acc_desc = if lock then create_atomicReadAccessDescriptor() else create_readAccessDescriptor();
             let operand_size_bytes = operand_size / 8;
@@ -77,7 +77,7 @@ val read_rmi_operand_with_lock: forall 'operand_size, 'operand_size in {8, 16, 3
 function read_rmi_operand_with_lock(lock, operand_size, operand) = {
     match operand {
         rmi_IMM(imm) => read_imm(operand_size, imm),
-        rmi_REG(reg_index) => read_GPR(operand_size, reg_index),
+        rmi_REG(reg) => read_GPR(operand_size, reg),
         rmi_MEM(mem_addr) => {
             let acc_desc = if lock then create_atomicReadAccessDescriptor() else create_readAccessDescriptor();
             let operand_size_bytes = operand_size / 8;
@@ -104,7 +104,7 @@ overload read_operand = {
 val write_rm_operand_with_lock: forall 'operand_size, 'operand_size in {8, 16, 32, 64}. (bool, int('operand_size), rm_operand, bits('operand_size)) -> unit
 function write_rm_operand_with_lock(lock, operand_size, operand, value) = {
     match operand {
-        rm_REG(reg_index) => write_GPR(operand_size, reg_index, value),
+        rm_REG(reg) => write_GPR(operand_size, reg, value),
         rm_MEM(mem_addr) => {
             let acc_desc = if lock then create_atomicWriteAccessDescriptor() else create_writeAccessDescriptor();
             let operand_size_bytes = operand_size / 8;

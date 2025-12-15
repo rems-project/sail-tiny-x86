@@ -9,20 +9,19 @@ function write_then_read_mem() -> unit = {
 }
 
 function mov_reg_to_mem() -> unit = {
-  let wsize = 16;
-  write_GPR(wsize, 8, get_slice_int(wsize, -236, 0));
-  execute(MOV(wsize, rm_MEM(0xFFFF_FFFF_FFFF_FFF8), rmi_REG(8)));
-  assert(signed(read_operand(false, wsize, rm_MEM(0xFFFF_FFFF_FFFF_FFF8))) == -236, "MOV(mem, reg) gave an incorrect answer")
+  let operand_size = 16;
+  write_GPR(operand_size, 8, get_slice_int(operand_size, -236, 0));
+  execute(MOV(operand_size, rm_MEM(0xFFFF_FFFF_FFFF_FFF8), rmi_REG(8)));
+  assert(signed(read_operand(false, operand_size, rm_MEM(0xFFFF_FFFF_FFFF_FFF8))) == -236, "MOV(mem, reg) gave an incorrect answer")
 }
 
 function xor_2_numbers() -> unit = {
   let lock = false;
-  let wsize1 = 64;
-  let wsize2 = 32;
-  write_GPR(wsize1, 8, 0x0101_0101_0101_0101);
+  let operand_size1 = 64;
+  write_GPR(operand_size1, 8, 0x0101_0101_0101_0101);
   let imm_val = 0x0000_1111;
-  execute(XOR(lock, wsize1, rm_REG(8), rmi_IMM(IMM32(imm_val))));
-  assert(read_GPR(wsize1, 8) == 0x0101_0101_0101_1010, "XOR(reg, imm) gave an incorrect answer")
+  execute(XOR(lock, operand_size1, rm_REG(8), rmi_IMM(IMM32(imm_val))));
+  assert(read_GPR(operand_size1, 8) == 0x0101_0101_0101_1010, "XOR(reg, imm) gave an incorrect answer")
 }
 
 function cmp_jns() -> unit = {
@@ -42,8 +41,8 @@ function cmp_jns() -> unit = {
 function push_pop() -> unit = {
   let RSP1 = RSP;
   // push test
-  let wsize1 = 16;
-  execute(PUSH(wsize1, rmi_IMM(IMM16(0xF0F0))));
+  let operand_size1 = 16;
+  execute(PUSH(operand_size1, rmi_IMM(IMM16(0xF0F0))));
   assert(RSP + 8 == RSP1, "PUSH does not correctly change stack pointer");
   assert(read_operand(false, 64, rm_MEM(RSP)) == sail_sign_extend(0xF0F0, 64), "PUSH does not push the correct value to the top of the stack");
   // pop test
@@ -54,30 +53,30 @@ function push_pop() -> unit = {
 
 function add_2_numbers() -> unit = {
   let lock = false;
-  let wsize1 = 64;
-  let wsize2 = 32;
-  write_GPR(wsize1, 8, get_slice_int(wsize1, 30, 0));
-  let imm_val = get_slice_int(wsize2, -250, 0);
-  execute(ADD(lock, wsize1, rm_REG(8), rmi_IMM(IMM32(imm_val))));
-  assert(signed(read_GPR(wsize1, 8)) == 30 - 250, "ADD(reg, imm) gave an incorrect answer")
+  let operand_size1 = 64;
+  let operand_size2 = 32;
+  write_GPR(operand_size1, 8, get_slice_int(operand_size1, 30, 0));
+  let imm_val = get_slice_int(operand_size2, -250, 0);
+  execute(ADD(lock, operand_size1, rm_REG(8), rmi_IMM(IMM32(imm_val))));
+  assert(signed(read_GPR(operand_size1, 8)) == 30 - 250, "ADD(reg, imm) gave an incorrect answer")
 }
 
 function subtract_2_numbers() -> unit = {
   let lock = false;
-  let wsize1 = 64;
-  let wsize2 = 32;
-  write_GPR(wsize1, 8, get_slice_int(wsize1, 30, 0));
-  let imm_val = get_slice_int(wsize2, -250, 0);
-  execute(SUB(lock, wsize1, rm_REG(8), rmi_IMM(IMM32(imm_val))));
-  assert(signed(read_GPR(wsize1, 8)) == 30 - (- 250), "SUB(reg, imm) gave an incorrect answer");
+  let operand_size1 = 64;
+  let operand_size2 = 32;
+  write_GPR(operand_size1, 8, get_slice_int(operand_size1, 30, 0));
+  let imm_val = get_slice_int(operand_size2, -250, 0);
+  execute(SUB(lock, operand_size1, rm_REG(8), rmi_IMM(IMM32(imm_val))));
+  assert(signed(read_GPR(operand_size1, 8)) == 30 - (- 250), "SUB(reg, imm) gave an incorrect answer");
 }
 
 function multiply_2_numbers() -> unit = {
-  let wsize = 16;
-  write_GPR(wsize, 8, get_slice_int(wsize, 30, 0));
-  write_GPR(wsize, 9, get_slice_int(wsize, -250, 0));
-  execute(IMUL(wsize, 8, rm_REG(9)));
-  assert(signed(read_GPR(wsize, 8)) == 30 * (- 250), "IMUL(reg, reg) gave an incorrect answer");
+  let operand_size = 16;
+  write_GPR(operand_size, 8, get_slice_int(operand_size, 30, 0));
+  write_GPR(operand_size, 9, get_slice_int(operand_size, -250, 0));
+  execute(IMUL(operand_size, 8, rm_REG(9)));
+  assert(signed(read_GPR(operand_size, 8)) == 30 * (- 250), "IMUL(reg, reg) gave an incorrect answer");
 }
 
 function call_leave_ret() -> unit = {

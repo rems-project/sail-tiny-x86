@@ -1,17 +1,17 @@
 union ast = {
     // Structure of all possible executable instructions
     // if a type contains 2 operands, the first operand is dest and the second is src, unless the instruction is CMP
-    MOV: (word_size, rm_operand, rmi_operand),
-    XOR: (bool, word_size, rm_operand, rmi_operand),
+    MOV: (operand_size, rm_operand, rmi_operand),
+    XOR: (bool, operand_size, rm_operand, rmi_operand),
     SFENCE: unit,
     LFENCE: unit,
     MFENCE: unit,
-    CMP: (word_size, rm_operand, rmi_operand),
-    PUSH: (word_size, rmi_operand),
-    POP: (word_size, rm_operand),
-    ADD: (bool, word_size, rm_operand, rmi_operand),
-    SUB: (bool, word_size, rm_operand, rmi_operand),
-    IMUL: (word_size, reg_index, rm_operand), // IMUL with only 2 arguments (dest and src)
+    CMP: (operand_size, rm_operand, rmi_operand),
+    PUSH: (operand_size, rmi_operand),
+    POP: (operand_size, rm_operand),
+    ADD: (bool, operand_size, rm_operand, rmi_operand),
+    SUB: (bool, operand_size, rm_operand, rmi_operand),
+    IMUL: (operand_size, reg_index, rm_operand), // IMUL with only 2 arguments (dest and src)
     CALL: imm32,
     LEAVE: {16, 64}, // operand size can be 16 or 64 bits
     RET: unit, // near return only
@@ -198,33 +198,33 @@ function read_mod_rm_byte(instruction_ptr, read_offset) = {
  *-----------------------------------------------------------------------------*/
 
 // Get the operand size for an instruction which doesn't ignore the REX prefix
-val get_wsize_using_REX: (decodedPrefixes, {32, 64}) -> {16, 32, 64}
-function get_wsize_using_REX(decoded_prefixes, default_wsize) = {
+val get_operand_size_using_REX: (decodedPrefixes, {32, 64}) -> {16, 32, 64}
+function get_operand_size_using_REX(decoded_prefixes, default_operand_size) = {
     if decoded_prefixes.REX[W] == 0b1 then 64 
     else if decoded_prefixes.op_size_override then 16 
-    else default_wsize
+    else default_operand_size
 }
 
 // Get the operand size for an instruction which ignores the REX prefix
-val get_wsize_ignoring_REX: (decodedPrefixes, {32, 64}) -> {16, 32, 64}
-function get_wsize_ignoring_REX(decoded_prefixes, default_wsize) = {
+val get_operand_size_ignoring_REX: (decodedPrefixes, {32, 64}) -> {16, 32, 64}
+function get_operand_size_ignoring_REX(decoded_prefixes, default_operand_size) = {
     if decoded_prefixes.op_size_override then 16
-    else default_wsize
+    else default_operand_size
 }
 
 // Read and decode immediate operand
-val read_imm_operand: (bits(64), int, word_size) -> (int, imm)
-function read_imm_operand(instruction_ptr, read_offset, wsize) = {
-    let wsize_bytes = wsize / 8;
-    assert(wsize == 8 * wsize_bytes); // required for type-checking
-    let imm_value = read_memory(wsize_bytes, instruction_ptr + read_offset, create_iFetchAccessDescriptor());
-    let wrapped_imm: imm = match wsize {
+val read_imm_operand: (bits(64), int, operand_size) -> (int, imm)
+function read_imm_operand(instruction_ptr, read_offset, operand_size) = {
+    let operand_size_bytes = operand_size / 8;
+    assert(operand_size == 8 * operand_size_bytes); // required for type-checking
+    let imm_value = read_memory(operand_size_bytes, instruction_ptr + read_offset, create_iFetchAccessDescriptor());
+    let wrapped_imm: imm = match operand_size {
         8 => IMM8(imm_value),
         16 => IMM16(imm_value),
         32 => IMM32(imm_value),
         64 => IMM64(imm_value)
     };
-    (read_offset + wsize_bytes, wrapped_imm)
+    (read_offset + operand_size_bytes, wrapped_imm)
 }
 
 // function to decode single r/m operand, given the mod_rm_byte
@@ -314,50 +314,50 @@ function decode_2_rm_operands(instruction_ptr, read_offset, operand1_addr_method
 }
 
 /* get 2 operands for operand type = v (see A.1 of the Intel manual)
-    This means that the 2 operands must both be register or memory locations of wsize 16, 32, or 64 bits
+    This means that the 2 operands must both be register or memory locations of operand size 16, 32, or 64 bits
     and the operand size depends on the operand size override and REX prefixes */
-val get_2_type_v_operands: (bits(64), int, addressingMethod, addressingMethod, decodedPrefixes) -> (int, word_size, rm_operand, rmi_operand)
+val get_2_type_v_operands: (bits(64), int, addressingMethod, addressingMethod, decodedPrefixes) -> (int, operand_size, rm_operand, rmi_operand)
 function get_2_type_v_operands(instruction_ptr, read_offset, operand1_addr_method, operand2_addr_method, decoded_prefixes) = {
-    // the operand type is v, so wsize is determined by the operand size. Default wsize is 32 bits.
-    let wsize = get_wsize_using_REX(decoded_prefixes, 32);
+    // the operand type is v, so operand size is determined by the instruction prefices. Default operand size is 32 bits.
+    let operand_size = get_operand_size_using_REX(decoded_prefixes, 32);
     // decode operands
     let (new_read_offset, operand1, operand2) = 
         decode_2_rm_operands(instruction_ptr, read_offset, operand1_addr_method, operand2_addr_method, decoded_prefixes.REX);
-    (new_read_offset, wsize, operand1, operand2)
+    (new_read_offset, operand_size, operand1, operand2)
 }
 
 // Get 2 operands of the addressing method + operand type: Operand 1 = Ev, Operand 2 = Gv
-val get_Ev_Gv_operands: (bits(64), int, decodedPrefixes) -> (int, word_size, rm_operand, rmi_operand)
+val get_Ev_Gv_operands: (bits(64), int, decodedPrefixes) -> (int, operand_size, rm_operand, rmi_operand)
 function get_Ev_Gv_operands(instruction_ptr, read_offset, decoded_prefixes) =
     get_2_type_v_operands(instruction_ptr, read_offset, addressingMethod_E, addressingMethod_G, decoded_prefixes)
 
 // Get 2 operands of the addressing method + operand type: Operand 1 = Gv, Operand 2 = Ev
-val get_Gv_Ev_operands: (bits(64), int, decodedPrefixes) -> (int, word_size, rm_operand, rmi_operand)
+val get_Gv_Ev_operands: (bits(64), int, decodedPrefixes) -> (int, operand_size, rm_operand, rmi_operand)
 function get_Gv_Ev_operands(instruction_ptr, read_offset, decoded_prefixes) =
     get_2_type_v_operands(instruction_ptr, read_offset, addressingMethod_G, addressingMethod_E, decoded_prefixes)
 
 // function to decode a r/m operand for PUSH and POP instructions
-val decode_push_or_pop_rm_operand: (bits(64), int, decodedPrefixes, modRMByte) -> (int, word_size, rm_operand)
+val decode_push_or_pop_rm_operand: (bits(64), int, decodedPrefixes, modRMByte) -> (int, operand_size, rm_operand)
 function decode_push_or_pop_rm_operand(instruction_ptr, read_offset, decoded_prefixes, mod_rm_byte) = {
-    // Get wsize. Default wsize is 64 bits. Ignore REX.
-    let wsize = get_wsize_ignoring_REX(decoded_prefixes, 64);
+    // Get operand size. Default operand size is 64 bits. Ignore REX.
+    let operand_size = get_operand_size_ignoring_REX(decoded_prefixes, 64);
     // Decode operand. Operand addressing method + operand type is Ev
     let (final_offset, operand) = decode_rm_operand_inner(addressingMethod_E, instruction_ptr, read_offset, mod_rm_byte, decoded_prefixes.REX);
-    (final_offset, wsize, operand)
+    (final_offset, operand_size, operand)
 }
 
 // Get 2 operands of the addressing method + operand type: Operand 1 = Ev, Operand 2 = Iz
-val get_Ev_Iz_operands: (bits(64), int, decodedPrefixes, modRMByte) -> (int, word_size, rm_operand, imm)
+val get_Ev_Iz_operands: (bits(64), int, decodedPrefixes, modRMByte) -> (int, operand_size, rm_operand, imm)
 function get_Ev_Iz_operands(instruction_ptr, read_offset, decoded_prefixes, mod_rm_byte) = {
-    // Get wsize. Default is 32 bits.
-    let wsize = get_wsize_using_REX(decoded_prefixes, 32);
+    // Get operand size. Default is 32 bits.
+    let operand_size = get_operand_size_using_REX(decoded_prefixes, 32);
     // Get r/m operand
     let (read_offset_2, operand1) = decode_rm_operand_inner(addressingMethod_E, instruction_ptr, read_offset, mod_rm_byte, decoded_prefixes.REX);
     // Get imm operand
-    let imm_size = if wsize == 64 then 32 else wsize;
+    let imm_size = if operand_size == 64 then 32 else operand_size;
     let (read_offset_3, imm) = read_imm_operand(instruction_ptr, read_offset_2, imm_size);
     // return new read offset, operand size, and operands
-    (read_offset_3, wsize, operand1, imm)
+    (read_offset_3, operand_size, operand1, imm)
 }
 
 

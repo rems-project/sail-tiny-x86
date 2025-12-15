@@ -53,9 +53,9 @@ function read_imm(operand_size, imm) = {
     }
 }
 
-/* read register or memory operand */
-val read_rm_operand: forall 'operand_size, 'operand_size in {8, 16, 32, 64}. (bool, int('operand_size), rm_operand) -> bits('operand_size)
-function read_rm_operand(lock, operand_size, operand) = {
+/* read register or memory operand, for instructions using the lock prefix */
+val read_rm_operand_with_lock: forall 'operand_size, 'operand_size in {8, 16, 32, 64}. (bool, int('operand_size), rm_operand) -> bits('operand_size)
+function read_rm_operand_with_lock(lock, operand_size, operand) = {
     match operand {
         rm_REG(reg_index) => read_GPR(operand_size, reg_index),
         rm_MEM(mem_addr) => {
@@ -67,9 +67,14 @@ function read_rm_operand(lock, operand_size, operand) = {
     }
 }
 
-/* read register / memory / immediate operand */
-val read_rmi_operand: forall 'operand_size, 'operand_size in {8, 16, 32, 64}. (bool, int('operand_size), rmi_operand) -> bits('operand_size)
-function read_rmi_operand(lock, operand_size, operand) = {
+/* read register or memory operand, for instructions not using the lock prefix */
+val read_rm_operand_without_lock: forall 'operand_size, 'operand_size in {8, 16, 32, 64}. (int('operand_size), rm_operand) -> bits('operand_size)
+function read_rm_operand_without_lock(operand_size, operand) = 
+    read_rm_operand_with_lock(false, operand_size, operand)
+
+/* read register / memory / immediate operand, for instructions using the lock prefix */
+val read_rmi_operand_with_lock: forall 'operand_size, 'operand_size in {8, 16, 32, 64}. (bool, int('operand_size), rmi_operand) -> bits('operand_size)
+function read_rmi_operand_with_lock(lock, operand_size, operand) = {
     match operand {
         rmi_IMM(imm) => read_imm(operand_size, imm),
         rmi_REG(reg_index) => read_GPR(operand_size, reg_index),
@@ -82,12 +87,22 @@ function read_rmi_operand(lock, operand_size, operand) = {
     }
 }
 
-/* overloaded function to read any operand type present in the ast */
-overload read_operand = {read_rm_operand, read_rmi_operand}
+/* read register / memory / immediate operand, for instructions not using the lock prefix */
+val read_rmi_operand_without_lock: forall 'operand_size, 'operand_size in {8, 16, 32, 64}. (int('operand_size), rmi_operand) -> bits('operand_size)
+function read_rmi_operand_without_lock(operand_size, operand) = 
+    read_rmi_operand_with_lock(false, operand_size, operand)
 
-/* write to reg or mem location */
-val write_rm_operand: forall 'operand_size, 'operand_size in {8, 16, 32, 64}. (bool, int('operand_size), rm_operand, bits('operand_size)) -> unit
-function write_rm_operand(lock, operand_size, operand, value) = {
+/* overloaded function to read any operand that could be one of multiple types */
+overload read_operand = {
+    read_rm_operand_with_lock, 
+    read_rm_operand_without_lock, 
+    read_rmi_operand_with_lock, 
+    read_rmi_operand_without_lock
+}
+
+/* write to reg or mem location, for instructions using the lock prefix */
+val write_rm_operand_with_lock: forall 'operand_size, 'operand_size in {8, 16, 32, 64}. (bool, int('operand_size), rm_operand, bits('operand_size)) -> unit
+function write_rm_operand_with_lock(lock, operand_size, operand, value) = {
     match operand {
         rm_REG(reg_index) => write_GPR(operand_size, reg_index, value),
         rm_MEM(mem_addr) => {
@@ -99,5 +114,10 @@ function write_rm_operand(lock, operand_size, operand, value) = {
     }
 }
 
-/* overloaded function to write to any register or memory type */
-overload write_operand = {write_rm_operand}
+/* write to reg or mem location, for instructions not using the lock prefix */
+val write_rm_operand_without_lock: forall 'operand_size, 'operand_size in {8, 16, 32, 64}. (int('operand_size), rm_operand, bits('operand_size)) -> unit
+function write_rm_operand_without_lock(operand_size, operand, value) = 
+    write_rm_operand_with_lock(false, operand_size, operand, value)
+
+/* overloaded function to write to any operand that could be a register or memory type */
+overload write_operand = {write_rm_operand_with_lock, write_rm_operand_without_lock}

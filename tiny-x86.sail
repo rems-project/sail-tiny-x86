@@ -26,7 +26,15 @@ function clause execute(MOV(operand_size, dest, src)) = {
     write_operand(operand_size, dest, val_to_write)
 }
 
-// Decode MOV r/m{32, 64}, r{32, 64}
+// Decode MOV r/m8 r8
+function clause decode_one_byte_instruction(0x88, instruction_ptr, read_offset, decoded_prefixes) = {
+    // get 2 operands of the addressing method + operand type: Operand 1 = Ev, Operand 2 = Gv
+    let (new_read_offset, operand1, operand2) = get_Eb_Gb_operands(instruction_ptr, read_offset, decoded_prefixes.REX);
+    // return new read offset and decoded instruction
+    Some(new_read_offset, MOV(8, operand1, operand2))
+}
+
+// Decode MOV r/m{16, 32, 64}, r{16, 32, 64}
 function clause decode_one_byte_instruction(0x89, instruction_ptr, read_offset, decoded_prefixes) = {
     // get 2 operands of the addressing method + operand type: Operand 1 = Ev, Operand 2 = Gv
     let (new_read_offset, operand_size, operand1, operand2) = get_Ev_Gv_operands(instruction_ptr, read_offset, decoded_prefixes);
@@ -245,7 +253,7 @@ function clause execute(CMP(operand_size, first, second)) = {
 function clause decode_one_byte_instruction(0x39, instruction_ptr, read_offset, decoded_prefixes) = {
     // addressing method + operand type: Ev, Gv
     let (new_read_offset, operand_size, operand1, operand2) = 
-        get_2_type_v_operands(instruction_ptr, read_offset, addressingMethod_E, addressingMethod_G, decoded_prefixes);
+        get_Ev_Gv_operands(instruction_ptr, read_offset, decoded_prefixes);
     Some(new_read_offset, CMP(operand_size, operand1, operand2))
 }
 
@@ -253,7 +261,7 @@ function clause decode_one_byte_instruction(0x39, instruction_ptr, read_offset, 
 function clause decode_one_byte_instruction(0x3B, instruction_ptr, read_offset, decoded_prefixes) = {
     // addressing method + operand type: Gv, Ev
     let (new_read_offset, operand_size, operand1, operand2) = 
-        get_2_type_v_operands(instruction_ptr, read_offset, addressingMethod_G, addressingMethod_E, decoded_prefixes);
+        get_Gv_Ev_operands(instruction_ptr, read_offset, decoded_prefixes);
     Some(new_read_offset, CMP(operand_size, operand1, operand2))
 }
 

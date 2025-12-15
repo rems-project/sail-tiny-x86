@@ -313,28 +313,39 @@ function decode_2_rm_operands(instruction_ptr, read_offset, operand1_addr_method
     (new_offset3, operand1, operand2)
 }
 
-/* get 2 operands for operand type = v (see A.1 of the Intel manual)
-    This means that the 2 operands must both be register or memory locations of operand size 16, 32, or 64 bits
-    and the operand size depends on the operand size override and REX prefixes */
-val get_2_type_v_operands: (bits(64), int, addressingMethod, addressingMethod, decodedPrefixes) -> (int, operand_size, rm_operand, rmi_operand)
-function get_2_type_v_operands(instruction_ptr, read_offset, operand1_addr_method, operand2_addr_method, decoded_prefixes) = {
+// Get 2 operands of the addressing method + operand type: Operand 1 = Ev, Operand 2 = Gv
+val get_Ev_Gv_operands: (bits(64), int, decodedPrefixes) -> (int, operand_size, rm_operand, rmi_operand)
+function get_Ev_Gv_operands(instruction_ptr, read_offset, decoded_prefixes) = {
     // the operand type is v, so operand size is determined by the instruction prefices. Default operand size is 32 bits.
     let operand_size = get_operand_size_using_REX(decoded_prefixes, 32);
     // decode operands
     let (new_read_offset, operand1, operand2) = 
-        decode_2_rm_operands(instruction_ptr, read_offset, operand1_addr_method, operand2_addr_method, decoded_prefixes.REX);
+        decode_2_rm_operands(instruction_ptr, read_offset, addressingMethod_E, addressingMethod_G, decoded_prefixes.REX);
     (new_read_offset, operand_size, operand1, operand2)
 }
 
-// Get 2 operands of the addressing method + operand type: Operand 1 = Ev, Operand 2 = Gv
-val get_Ev_Gv_operands: (bits(64), int, decodedPrefixes) -> (int, operand_size, rm_operand, rmi_operand)
-function get_Ev_Gv_operands(instruction_ptr, read_offset, decoded_prefixes) =
-    get_2_type_v_operands(instruction_ptr, read_offset, addressingMethod_E, addressingMethod_G, decoded_prefixes)
-
 // Get 2 operands of the addressing method + operand type: Operand 1 = Gv, Operand 2 = Ev
 val get_Gv_Ev_operands: (bits(64), int, decodedPrefixes) -> (int, operand_size, rm_operand, rmi_operand)
-function get_Gv_Ev_operands(instruction_ptr, read_offset, decoded_prefixes) =
-    get_2_type_v_operands(instruction_ptr, read_offset, addressingMethod_G, addressingMethod_E, decoded_prefixes)
+function get_Gv_Ev_operands(instruction_ptr, read_offset, decoded_prefixes) = {
+    // the operand type is v, so operand size is determined by the instruction prefices. Default operand size is 32 bits.
+    let operand_size = get_operand_size_using_REX(decoded_prefixes, 32);
+    // decode operands
+    let (new_read_offset, operand1, operand2) = 
+        decode_2_rm_operands(instruction_ptr, read_offset, addressingMethod_G, addressingMethod_E, decoded_prefixes.REX);
+    (new_read_offset, operand_size, operand1, operand2)
+}
+
+// Get 2 operands of the addressing method + operand type: Operand 1 = Eb, Operand 2 = Gb
+// Operand type is b, which means that the operand size is 8 bits. So we don't need to return this information
+val get_Eb_Gb_operands: (bits(64), int, REX) -> (int, rm_operand, rmi_operand)
+function get_Eb_Gb_operands(instruction_ptr, read_offset, REX) = 
+    decode_2_rm_operands(instruction_ptr, read_offset, addressingMethod_E, addressingMethod_G, REX)
+
+// Get 2 operands of the addressing method + operand type: Operand 1 = Gb, Operand 2 = Eb
+// Operand type is b, which means that the operand size is 8 bits. So we don't need to return this information
+val get_Gb_Eb_operands: (bits(64), int, REX) -> (int, rm_operand, rmi_operand)
+function get_Gb_Eb_operands(instruction_ptr, read_offset, REX) = 
+    decode_2_rm_operands(instruction_ptr, read_offset, addressingMethod_G, addressingMethod_E, REX)
 
 // function to decode a r/m operand for PUSH and POP instructions
 val decode_push_or_pop_rm_operand: (bits(64), int, decodedPrefixes, modRMByte) -> (int, operand_size, rm_operand)

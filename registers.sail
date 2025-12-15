@@ -59,22 +59,22 @@ register RFLAGS: rflags
 /* read and write least-significant 8,16,32,64 (32 with 0 extend for write) bits */
  val read_GPR: forall 'm, 'm in {8, 16, 32, 64}. (int('m), reg_index) -> bits('m)
 
- function read_GPR(wsize, i: reg_index) = {
+ function read_GPR(operand_size, i: reg_index) = {
     let reg = *GPRs[i];
-    reg[wsize - 1 .. 0]
+    reg[operand_size - 1 .. 0]
 }
 
 val write_GPR: forall 'm, 'm in {8, 16, 32, 64}. (int('m), reg_index, bits('m)) -> unit
 
-function write_GPR(wsize, i: reg_index, value) = {
-    if wsize == 32 then {
+function write_GPR(operand_size, i: reg_index, value) = {
+    if operand_size == 32 then {
         // if writing 32 bits to a register, the value to be written is zero-extended to 64 bits
         (*GPRs[i])[63 .. 32] = 0x0000_0000;
         (*GPRs[i])[31 .. 0] = value;
     }
     else
-        // the value is written to the last wsize bits of the register
-        (*GPRs[i])[wsize - 1 .. 0] = value;
+        // the value is written to the last operand_size bits of the register
+        (*GPRs[i])[operand_size - 1 .. 0] = value;
 }
 
 /* change the value of the parity flag depending on the result of an operation */

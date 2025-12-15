@@ -12,7 +12,7 @@ scattered function execute
 
 /* MOV */
 
-function clause execute(MOV(wsize, dest, src)) = {
+function clause execute(MOV(operand_size, dest, src)) = {
     // MOV cannot occur between dest = memory location and src = memory location
     fail_if_two_mem_operands(dest, src, "MOV");
     // MOV operation cannot be executed on dest = mem64 and src = imm64
@@ -22,36 +22,36 @@ function clause execute(MOV(wsize, dest, src)) = {
     };
 
     // execute MOV instruction
-    let val_to_write = read_operand(false, wsize, src);
-    write_operand(false, wsize, dest, val_to_write)
+    let val_to_write = read_operand(false, operand_size, src);
+    write_operand(false, operand_size, dest, val_to_write)
 }
 
 // Decode MOV r/m{32, 64}, r{32, 64}
 function clause decode_one_byte_instruction(0x89, instruction_ptr, read_offset, decoded_prefixes) = {
     // get 2 operands of the addressing method + operand type: Operand 1 = Ev, Operand 2 = Gv
-    let (new_read_offset, wsize, operand1, operand2) = get_Ev_Gv_operands(instruction_ptr, read_offset, decoded_prefixes);
+    let (new_read_offset, operand_size, operand1, operand2) = get_Ev_Gv_operands(instruction_ptr, read_offset, decoded_prefixes);
     // return new read offset and decoded instruction
-    Some(new_read_offset, MOV(wsize, operand1, operand2))
+    Some(new_read_offset, MOV(operand_size, operand1, operand2))
 }
 
 // Decode MOV r{32, 64}, r/m{32, 64}
 function clause decode_one_byte_instruction(0x8B, instruction_ptr, read_offset, decoded_prefixes) = {
     // get 2 operands of the addressing method + operand type: Operand 1 = Gv, Operand 2 = Ev
-    let (new_read_offset, wsize, operand1, operand2) = get_Gv_Ev_operands(instruction_ptr, read_offset, decoded_prefixes);
+    let (new_read_offset, operand_size, operand1, operand2) = get_Gv_Ev_operands(instruction_ptr, read_offset, decoded_prefixes);
     // return new read offset and decoded instruction
-    Some(new_read_offset, MOV(wsize, operand1, operand2))
+    Some(new_read_offset, MOV(operand_size, operand1, operand2))
 }
 
 // Decode MOV r{16, 32, 64} imm{16, 32, 64}
 function clause decode_one_byte_instruction(0xB @ 0b1 @ reg_field, instruction_ptr, read_offset, decoded_prefixes) = {
     // get register location embedded in the opcode
     let reg_index = get_reg_value_in_opcode_byte(reg_field, decoded_prefixes.REX);
-    // Get wsize. Default is 32 bits.
-    let wsize = get_wsize_using_REX(decoded_prefixes, 32);
+    // Get operand_size. Default is 32 bits.
+    let operand_size = get_operand_size_using_REX(decoded_prefixes, 32);
     // get imm operand
-    let (new_read_offset, imm) = read_imm_operand(instruction_ptr, read_offset, wsize);
+    let (new_read_offset, imm) = read_imm_operand(instruction_ptr, read_offset, operand_size);
     // return new read offset and decoded instruction
-    Some(new_read_offset, MOV(wsize, rm_REG(reg_index), rmi_IMM(imm)))
+    Some(new_read_offset, MOV(operand_size, rm_REG(reg_index), rmi_IMM(imm)))
 }
 
 // Decode MOV r/m{16, 32, 64} imm{16, 32, 32}
@@ -65,15 +65,15 @@ function clause decode_one_byte_instruction(0xC7, instruction_ptr, read_offset, 
     if unsigned(mod_rm_byte[REG]) != 0 then fail("The instruction to be decoded is either reserved or not implemented in this model");
 
     // Get 2 operands of the addressing method + operand type: Operand 1 = Ev, Operand 2 = Iz
-    let (new_read_offset, wsize, operand1, imm) = get_Ev_Iz_operands(instruction_ptr, read_offset, decoded_prefixes, mod_rm_byte);
+    let (new_read_offset, operand_size, operand1, imm) = get_Ev_Iz_operands(instruction_ptr, read_offset, decoded_prefixes, mod_rm_byte);
 
     // return new read offset and decoded instruction
-    Some(new_read_offset, MOV(wsize, operand1, rmi_IMM(imm)))
+    Some(new_read_offset, MOV(operand_size, operand1, rmi_IMM(imm)))
 }
 
 /* XOR */
 
-function clause execute(XOR(lock, wsize, dest, src)) = {
+function clause execute(XOR(lock, operand_size, dest, src)) = {
     // XOR cannot occur between dest = memory location and src = memory location
     fail_if_two_mem_operands(dest, src, "XOR");
     // For operation XOR, src = imm64 is not a valid operand 
@@ -88,19 +88,19 @@ function clause execute(XOR(lock, wsize, dest, src)) = {
     };
 
     // execute XOR instruction
-    let dest_val = read_operand(lock, wsize, dest);
-    let src_val = read_operand(false, wsize, src);
+    let dest_val = read_operand(lock, operand_size, dest);
+    let src_val = read_operand(false, operand_size, src);
     let result = xor_vec(dest_val, src_val);
-    write_operand(lock, wsize, dest, result);
+    write_operand(lock, operand_size, dest, result);
 
     /* change value of status flags */
     // clear overflow and carry flag
     RFLAGS[OF] = 0b0;
     RFLAGS[CF] = 0b0;
     // sign flag = msb of result (0 = +ve, 1 = -ve)
-    RFLAGS[SF] = [result[wsize - 1]];
+    RFLAGS[SF] = [result[operand_size - 1]];
     // set zero flag if result = 0, else clear zero flag
-    RFLAGS[ZF] = if result == sail_zero_extend(0x0, wsize) then 0b1 else 0b0;
+    RFLAGS[ZF] = if result == sail_zero_extend(0x0, operand_size) then 0b1 else 0b0;
     // set parity flag if least significant byte of result contains an even number of 1 bits, else clear
     update_parity_flag(result);
 }
@@ -108,17 +108,17 @@ function clause execute(XOR(lock, wsize, dest, src)) = {
 // Decode XOR r/m{32, 64}, r{32, 64}
 function clause decode_one_byte_instruction(0x31, instruction_ptr, read_offset, decoded_prefixes) = {
     // get 2 operands of the addressing method + operand type: Operand 1 = Ev, Operand 2 = Gv
-    let (new_read_offset, wsize, operand1, operand2) = get_Ev_Gv_operands(instruction_ptr, read_offset, decoded_prefixes);
+    let (new_read_offset, operand_size, operand1, operand2) = get_Ev_Gv_operands(instruction_ptr, read_offset, decoded_prefixes);
     // return new read offset and decoded instruction
-    Some(new_read_offset, XOR(decoded_prefixes.lock, wsize, operand1, operand2))
+    Some(new_read_offset, XOR(decoded_prefixes.lock, operand_size, operand1, operand2))
 }
 
 // Decode XOR r{32, 64}, r/m{32, 64}
 function clause decode_one_byte_instruction(0x33, instruction_ptr, read_offset, decoded_prefixes) = {
     // get 2 operands of the addressing method + operand type: Operand 1 = Gv, Operand 2 = Ev
-    let (new_read_offset, wsize, operand1, operand2) = get_Gv_Ev_operands(instruction_ptr, read_offset, decoded_prefixes);
+    let (new_read_offset, operand_size, operand1, operand2) = get_Gv_Ev_operands(instruction_ptr, read_offset, decoded_prefixes);
     // return new read offset and decoded instruction
-    Some(new_read_offset, XOR(decoded_prefixes.lock, wsize, operand1, operand2))
+    Some(new_read_offset, XOR(decoded_prefixes.lock, operand_size, operand1, operand2))
 }
 
 // Decode XOR, ADD, SUB, CMP r/m{16, 32, 64} imm{16, 32, 32}
@@ -129,15 +129,15 @@ function clause decode_one_byte_instruction(0x81, instruction_ptr, read_offset, 
     let (read_offset_2, mod_rm_byte) = read_mod_rm_byte(instruction_ptr, read_offset);
 
     // Get 2 operands of the addressing method + operand type: Operand 1 = Ev, Operand 2 = Iz
-    let (new_read_offset, wsize, operand1, imm) = get_Ev_Iz_operands(instruction_ptr, read_offset, decoded_prefixes, mod_rm_byte);
+    let (new_read_offset, operand_size, operand1, imm) = get_Ev_Iz_operands(instruction_ptr, read_offset, decoded_prefixes, mod_rm_byte);
     
     // Match to instruction based on opcode extension.
     // Return new read offset and decoded instruction
     match unsigned(mod_rm_byte[REG]) {
-        0 => Some(new_read_offset, ADD(decoded_prefixes.lock, wsize, operand1, rmi_IMM(imm))),
-        5 => Some(new_read_offset, SUB(decoded_prefixes.lock, wsize, operand1, rmi_IMM(imm))),
-        6 => Some(new_read_offset, XOR(decoded_prefixes.lock, wsize, operand1, rmi_IMM(imm))),
-        7 => Some(new_read_offset, CMP(wsize, operand1, rmi_IMM(imm))),
+        0 => Some(new_read_offset, ADD(decoded_prefixes.lock, operand_size, operand1, rmi_IMM(imm))),
+        5 => Some(new_read_offset, SUB(decoded_prefixes.lock, operand_size, operand1, rmi_IMM(imm))),
+        6 => Some(new_read_offset, XOR(decoded_prefixes.lock, operand_size, operand1, rmi_IMM(imm))),
+        7 => Some(new_read_offset, CMP(operand_size, operand1, rmi_IMM(imm))),
         _ => {
             fail("The instruction to be decoded is not implemented in this model");
             None()
@@ -212,7 +212,7 @@ function clause execute(MFENCE()) = {
 
 /* CMP */
 
-function clause execute(CMP(wsize, first, second)) = {
+function clause execute(CMP(operand_size, first, second)) = {
     // CMP cannot occur between first = memory location and second = memory location
     fail_if_two_mem_operands(first, second, "CMP");
     // For operation CMP, second = imm64 is not a valid operand 
@@ -222,19 +222,19 @@ function clause execute(CMP(wsize, first, second)) = {
     };
 
     // execute CMP instruction
-    let first_val = read_operand(false, wsize, first);
-    let second_val = read_operand(false, wsize, second);
+    let first_val = read_operand(false, operand_size, first);
+    let second_val = read_operand(false, operand_size, second);
     let result = sub_bits(first_val, second_val);
 
     /* change value of status flags. Equivalent to the changes made on executing the SUB instruction. */
     // sign flag = msb of result (0 = +ve, 1 = -ve)
-    RFLAGS[SF] = [result[wsize - 1]];
+    RFLAGS[SF] = [result[operand_size - 1]];
     // set overflow flag (which is for signed values) if first and second operand have opposite signs, but the sign of the result doesn't match the first operand, else clear
-    RFLAGS[OF] = if not_bool(first_val[wsize - 1] == second_val[wsize - 1]) & not_bool(result[wsize - 1] == first_val[wsize - 1]) then 0b1 else 0b0;
+    RFLAGS[OF] = if not_bool(first_val[operand_size - 1] == second_val[operand_size - 1]) & not_bool(result[operand_size - 1] == first_val[operand_size - 1]) then 0b1 else 0b0;
     // set carry flag if result < 0 (as it represents a borrow when subtracting 2 unsigned values), else clear
     RFLAGS[CF] = if unsigned(first_val) < unsigned(second_val) then 0b1 else 0b0;
     // set zero flag if result = 0, else clear zero flag
-    RFLAGS[ZF] = if result == sail_zero_extend(0x0, wsize) then 0b1 else 0b0;
+    RFLAGS[ZF] = if result == sail_zero_extend(0x0, operand_size) then 0b1 else 0b0;
     // Set aux carry flag if an arithmetic operation generates a borrow out of bit 3 (i.e. least significant 4 bits) of the result; cleared otherwise
     RFLAGS[AF] = if unsigned(first_val[3 .. 0]) < unsigned(second_val[3 .. 0]) then 0b1 else 0b0;
     // set parity flag if least significant byte of result contains an even number of 1 bits, else clear
@@ -244,36 +244,36 @@ function clause execute(CMP(wsize, first, second)) = {
 // Decode CMP r/m{32, 64}, r{32, 64}
 function clause decode_one_byte_instruction(0x39, instruction_ptr, read_offset, decoded_prefixes) = {
     // addressing method + operand type: Ev, Gv
-    let (new_read_offset, wsize, operand1, operand2) = 
+    let (new_read_offset, operand_size, operand1, operand2) = 
         get_2_type_v_operands(instruction_ptr, read_offset, addressingMethod_E, addressingMethod_G, decoded_prefixes);
-    Some(new_read_offset, CMP(wsize, operand1, operand2))
+    Some(new_read_offset, CMP(operand_size, operand1, operand2))
 }
 
 // Decode CMP r{32, 64}, r/m{32, 64}
 function clause decode_one_byte_instruction(0x3B, instruction_ptr, read_offset, decoded_prefixes) = {
     // addressing method + operand type: Gv, Ev
-    let (new_read_offset, wsize, operand1, operand2) = 
+    let (new_read_offset, operand_size, operand1, operand2) = 
         get_2_type_v_operands(instruction_ptr, read_offset, addressingMethod_G, addressingMethod_E, decoded_prefixes);
-    Some(new_read_offset, CMP(wsize, operand1, operand2))
+    Some(new_read_offset, CMP(operand_size, operand1, operand2))
 }
 
 // Decode CMP r/m{16, 32, 64} imm{16, 32, 32} is located in the XOR section
 
 /* PUSH */
 
-function clause execute(PUSH(wsize, src)) = {
+function clause execute(PUSH(operand_size, src)) = {
     // PUSH instruction does not allow src = imm64, reg8 or mem8
     // and in 64-bit mode, src = reg32 and mem32 are not encodable
     match src {
-        rmi_IMM(_) if wsize == 64 => fail("Operand for PUSH operation not allowed"),
-        rmi_REG(_) if wsize == 8 | wsize == 32 => fail("Operand for PUSH operation not allowed"),
-        rmi_MEM(_) if wsize == 8 | wsize == 32 => fail("Operand for PUSH operation not allowed"),
+        rmi_IMM(_) if operand_size == 64 => fail("Operand for PUSH operation not allowed"),
+        rmi_REG(_) if operand_size == 8 | operand_size == 32 => fail("Operand for PUSH operation not allowed"),
+        rmi_MEM(_) if operand_size == 8 | operand_size == 32 => fail("Operand for PUSH operation not allowed"),
         _ => ()
     };
 
     // If the source operand is an immediate of size less than the operand size, then sign-extend the value
     // default operand size is 8 bytes = 64 bits
-    let src_val = sail_sign_extend(read_operand(false, wsize, src), 64);
+    let src_val = sail_sign_extend(read_operand(false, operand_size, src), 64);
     // subtract 8 from RSP to point to the new top of the stack
     RSP = sub_bits(RSP, sail_zero_extend(0x8, 64));
     // push the new item to the top of the stack
@@ -289,10 +289,10 @@ function clause decode_one_byte_instruction(0x6A, instruction_ptr, read_offset, 
 
 // Decode PUSH imm{16, 32}
 function clause decode_one_byte_instruction(0x68, instruction_ptr, read_offset, decoded_prefixes) = {
-    // Get wsize. Default is 32 bits. Ignore REX prefix as we can't have a 64 bit immediate.
-    let wsize = get_wsize_ignoring_REX(decoded_prefixes, 32);
-    let (new_read_offset, imm) = read_imm_operand(instruction_ptr, read_offset, wsize);
-    Some(new_read_offset, PUSH(wsize, rmi_IMM(imm)))
+    // Get operand size. Default is 32 bits. Ignore REX prefix as we can't have a 64 bit immediate.
+    let operand_size = get_operand_size_ignoring_REX(decoded_prefixes, 32);
+    let (new_read_offset, imm) = read_imm_operand(instruction_ptr, read_offset, operand_size);
+    Some(new_read_offset, PUSH(operand_size, rmi_IMM(imm)))
 }
 
 // Decode PUSH r/m64 (r/m16 not yet supported)
@@ -307,7 +307,7 @@ function clause decode_one_byte_instruction(0xFF, instruction_ptr, read_offset, 
     
     // We have a push instruction (PUSH r/m{16, 64})
     // Decode operand
-    let (final_read_offset, wsize, working_operand) = 
+    let (final_read_offset, operand_size, working_operand) = 
         decode_push_or_pop_rm_operand(instruction_ptr, new_read_offset, decoded_prefixes, mod_rm_byte);
 
     // Change the operand type from rm_operand to rmi_operand to match the AST
@@ -317,29 +317,29 @@ function clause decode_one_byte_instruction(0xFF, instruction_ptr, read_offset, 
     };
 
     // return decoded instruction
-    Some(final_read_offset, PUSH(wsize,operand))
+    Some(final_read_offset, PUSH(operand_size,operand))
 }
 
 // Decode PUSH r{16, 64} and POP r{16, 64}
 function clause decode_one_byte_instruction(0x5 @ is_pop: bits(1) @ reg_field: bits(3), instruction_ptr, read_offset, decoded_prefixes) = {
     // get register location embedded in the opcode
     let reg_index = get_reg_value_in_opcode_byte(reg_field, decoded_prefixes.REX);
-    // get wsize. For PUSH, the default operand size is 64 bits. Ignore REX prefix
-    let wsize = get_wsize_ignoring_REX(decoded_prefixes, 64);
+    // get operand size. For PUSH, the default operand size is 64 bits. Ignore REX prefix
+    let operand_size = get_operand_size_ignoring_REX(decoded_prefixes, 64);
 
     if is_pop == 0b0 then
-        Some(read_offset, PUSH(wsize, rmi_REG(reg_index)))
+        Some(read_offset, PUSH(operand_size, rmi_REG(reg_index)))
     else
-        Some(read_offset, POP(wsize, rm_REG(reg_index)))
+        Some(read_offset, POP(operand_size, rm_REG(reg_index)))
 }
 
 /* POP */
 
-function clause execute(POP(wsize, dest)) = {
+function clause execute(POP(operand_size, dest)) = {
     // POP instruction does not allow dest to be 8 bits long. Due to 64 bit addressing, dest also cannot be 32 bits long.
     // Also not allowing a 16-bit dest in this model for simplicity (to keep the stack aligned)
-    if wsize == 8 | wsize == 32 then fail("dest size for POP operation not supported");
-    if wsize == 16 then fail("dest size for POP operation not implemented in this model");
+    if operand_size == 8 | operand_size == 32 then fail("dest size for POP operation not supported");
+    if operand_size == 16 then fail("dest size for POP operation not implemented in this model");
 
     // pop the value at the top of the stack to dest
     let popped_val = read_operand(false, 64, rm_MEM(RSP));
@@ -357,17 +357,17 @@ function clause decode_one_byte_instruction(0x8F, instruction_ptr, read_offset, 
     
     // We have a pop instruction (POP r/m{16, 64})
     // Decode operand
-    let (final_read_offset, wsize, operand) = 
+    let (final_read_offset, operand_size, operand) = 
         decode_push_or_pop_rm_operand(instruction_ptr, new_read_offset, decoded_prefixes, mod_rm_byte);
     // return decoded instruction
-    Some(final_read_offset, POP(wsize,operand))
+    Some(final_read_offset, POP(operand_size,operand))
 }
 
 // Decode POP r{16, 64} is implemented with "Decode PUSH r{16, 64}"
 
 /* ADD */
 
-function clause execute(ADD(lock, wsize, dest, src)) = {
+function clause execute(ADD(lock, operand_size, dest, src)) = {
     // ADD cannot occur between dest = memory location and src = memory location
     fail_if_two_mem_operands(dest, src, "ADD");
     // For operation ADD, src = imm64 is not a valid operand 
@@ -382,20 +382,20 @@ function clause execute(ADD(lock, wsize, dest, src)) = {
     };
 
     // execute ADD instruction
-    let dest_val = read_operand(lock, wsize, dest);
-    let src_val = read_operand(false, wsize, src);
+    let dest_val = read_operand(lock, operand_size, dest);
+    let src_val = read_operand(false, operand_size, src);
     let result = add_bits(dest_val, src_val);
-    write_operand(lock, wsize, dest, result);
+    write_operand(lock, operand_size, dest, result);
 
     /* change value of status flags */
     // sign flag = msb of result (0 = +ve, 1 = -ve)
-    RFLAGS[SF] = [result[wsize - 1]];
+    RFLAGS[SF] = [result[operand_size - 1]];
     // set overflow flag (which is for signed values) if dest and src operand have the same sign, but the sign of the result is different
-    RFLAGS[OF] = if dest_val[wsize - 1] == src_val[wsize - 1] & not_bool(result[wsize - 1] == dest_val[wsize - 1]) then 0b1 else 0b0;
+    RFLAGS[OF] = if dest_val[operand_size - 1] == src_val[operand_size - 1] & not_bool(result[operand_size - 1] == dest_val[operand_size - 1]) then 0b1 else 0b0;
     // set carry flag (which is for unsigned values) if result is smaller than dest or src, else clear
     RFLAGS[CF] = if unsigned(result) < unsigned(dest_val) | unsigned(result) < unsigned(src_val) then 0b1 else 0b0;
     // set zero flag if result = 0, else clear zero flag
-    RFLAGS[ZF] = if result == sail_zero_extend(0x0, wsize) then 0b1 else 0b0;
+    RFLAGS[ZF] = if result == sail_zero_extend(0x0, operand_size) then 0b1 else 0b0;
     // Set aux carry flag if an arithmetic operation generates a carry out of bit 3 (i.e. least significant 4 bits) of the result; cleared otherwise
     RFLAGS[AF] = if unsigned(dest_val[3 .. 0]) + unsigned(src_val[3 .. 0]) >= 16 then 0b1 else 0b0;
     // set parity flag if least significant byte of result contains an even number of 1 bits, else clear
@@ -405,24 +405,24 @@ function clause execute(ADD(lock, wsize, dest, src)) = {
 // Decode ADD r/m{32, 64}, r{32, 64}
 function clause decode_one_byte_instruction(0x01, instruction_ptr, read_offset, decoded_prefixes) = {
     // get 2 operands of the addressing method + operand type: Operand 1 = Ev, Operand 2 = Gv
-    let (new_read_offset, wsize, operand1, operand2) = get_Ev_Gv_operands(instruction_ptr, read_offset, decoded_prefixes);
+    let (new_read_offset, operand_size, operand1, operand2) = get_Ev_Gv_operands(instruction_ptr, read_offset, decoded_prefixes);
     // return new read offset and decoded instruction
-    Some(new_read_offset, ADD(decoded_prefixes.lock, wsize, operand1, operand2))
+    Some(new_read_offset, ADD(decoded_prefixes.lock, operand_size, operand1, operand2))
 }
 
 // Decode ADD r{32, 64}, r/m{32, 64}
 function clause decode_one_byte_instruction(0x03, instruction_ptr, read_offset, decoded_prefixes) = {
     // get 2 operands of the addressing method + operand type: Operand 1 = Gv, Operand 2 = Ev
-    let (new_read_offset, wsize, operand1, operand2) = get_Gv_Ev_operands(instruction_ptr, read_offset, decoded_prefixes);
+    let (new_read_offset, operand_size, operand1, operand2) = get_Gv_Ev_operands(instruction_ptr, read_offset, decoded_prefixes);
     // return new read offset and decoded instruction
-    Some(new_read_offset, ADD(decoded_prefixes.lock, wsize, operand1, operand2))
+    Some(new_read_offset, ADD(decoded_prefixes.lock, operand_size, operand1, operand2))
 }
 
 // Decode ADD r/m{16, 32, 64} imm{16, 32, 32} is located in the XOR section
 
 /* SUB */
 
-function clause execute(SUB(lock, wsize, dest, src)) = {
+function clause execute(SUB(lock, operand_size, dest, src)) = {
     // SUB cannot occur between dest = memory location and src = memory location
     fail_if_two_mem_operands(dest, src, "SUB");
     // For operation SUB, src = imm64 is not a valid operand 
@@ -437,20 +437,20 @@ function clause execute(SUB(lock, wsize, dest, src)) = {
     };
 
     // execute SUB instruction
-    let dest_val = read_operand(lock, wsize, dest);
-    let src_val = read_operand(false, wsize, src);
+    let dest_val = read_operand(lock, operand_size, dest);
+    let src_val = read_operand(false, operand_size, src);
     let result = sub_bits(dest_val, src_val);
-    write_operand(lock, wsize, dest, result);
+    write_operand(lock, operand_size, dest, result);
 
     /* change value of status flags */
     // sign flag = msb of result (0 = +ve, 1 = -ve)
-    RFLAGS[SF] = [result[wsize - 1]];
+    RFLAGS[SF] = [result[operand_size - 1]];
     // set overflow flag (which is for signed values) if dest and src operand have opposite signs, but the sign of the result doesn't match the dest operand, else clear
-    RFLAGS[OF] = if not_bool(dest_val[wsize - 1] == src_val[wsize - 1]) & not_bool(result[wsize - 1] == dest_val[wsize - 1]) then 0b1 else 0b0;
+    RFLAGS[OF] = if not_bool(dest_val[operand_size - 1] == src_val[operand_size - 1]) & not_bool(result[operand_size - 1] == dest_val[operand_size - 1]) then 0b1 else 0b0;
     // set carry flag if result < 0 (as it represents a borrow when subtracting 2 unsigned values), else clear
     RFLAGS[CF] = if unsigned(dest_val) < unsigned(src_val) then 0b1 else 0b0;
     // set zero flag if result = 0, else clear zero flag
-    RFLAGS[ZF] = if result == sail_zero_extend(0x0, wsize) then 0b1 else 0b0;
+    RFLAGS[ZF] = if result == sail_zero_extend(0x0, operand_size) then 0b1 else 0b0;
     // Set aux carry flag if an arithmetic operation generates a borrow out of bit 3 (i.e. least significant 4 bits) of the result; cleared otherwise
     RFLAGS[AF] = if unsigned(dest_val[3 .. 0]) < unsigned(src_val[3 .. 0]) then 0b1 else 0b0;
     // set parity flag if least significant byte of result contains an even number of 1 bits, else clear
@@ -460,37 +460,37 @@ function clause execute(SUB(lock, wsize, dest, src)) = {
 // Decode SUB r/m{32, 64}, r{32, 64}
 function clause decode_one_byte_instruction(0x29, instruction_ptr, read_offset, decoded_prefixes) = {
     // get 2 operands of the addressing method + operand type: Operand 1 = Ev, Operand 2 = Gv
-    let (new_read_offset, wsize, operand1, operand2) = get_Ev_Gv_operands(instruction_ptr, read_offset, decoded_prefixes);
+    let (new_read_offset, operand_size, operand1, operand2) = get_Ev_Gv_operands(instruction_ptr, read_offset, decoded_prefixes);
     // return new read offset and decoded instruction
-    Some(new_read_offset, SUB(decoded_prefixes.lock, wsize, operand1, operand2))
+    Some(new_read_offset, SUB(decoded_prefixes.lock, operand_size, operand1, operand2))
 }
 
 // Decode SUB r{32, 64}, r/m{32, 64}
 function clause decode_one_byte_instruction(0x2B, instruction_ptr, read_offset, decoded_prefixes) = {
     // get 2 operands of the addressing method + operand type: Operand 1 = Gv, Operand 2 = Ev
-    let (new_read_offset, wsize, operand1, operand2) = get_Gv_Ev_operands(instruction_ptr, read_offset, decoded_prefixes);
+    let (new_read_offset, operand_size, operand1, operand2) = get_Gv_Ev_operands(instruction_ptr, read_offset, decoded_prefixes);
     // return new read offset and decoded instruction
-    Some(new_read_offset, SUB(decoded_prefixes.lock, wsize, operand1, operand2))
+    Some(new_read_offset, SUB(decoded_prefixes.lock, operand_size, operand1, operand2))
 }
 
 // Decode SUB r/m{16, 32, 64} imm{16, 32, 32} is located in the XOR section
 
 /* IMUL */
 
-function clause execute(IMUL(wsize, dest, src)) = {
-    // IMUL cannot occur between 8 bit register or memory locations
-    if wsize == 8 then fail("8 bit operands are not valid for operation IMUL");
+function clause execute(IMUL(operand_size, dest, src)) = {
+    // IMUL cannot occur between 8 bit operands
+    if operand_size == 8 then fail("8 bit operands are not valid for operation IMUL");
 
     // execute IMUL
-    let dest_val = read_GPR(wsize, dest);
-    let src_val = read_operand(false, wsize, src);
+    let dest_val = read_GPR(operand_size, dest);
+    let src_val = read_operand(false, operand_size, src);
     let result_int = signed(dest_val) * signed(src_val);
-    let result_128 = get_slice_int(wsize * 2, result_int, 0);
-    let result = result_128[wsize - 1 .. 0];
-    write_GPR(wsize, dest, result);
+    let result_128 = get_slice_int(operand_size * 2, result_int, 0);
+    let result = result_128[operand_size - 1 .. 0];
+    write_GPR(operand_size, dest, result);
 
-    // set carry and overflow flag if the result overflows the allocated space (wsize bits), else clear
-    if sail_sign_extend(result, wsize * 2) == result_128 then {
+    // set carry and overflow flag if the result overflows the allocated space (operand_size bits), else clear
+    if sail_sign_extend(result, operand_size * 2) == result_128 then {
         RFLAGS[CF] = 0b0;
         RFLAGS[OF] = 0b0;
     }
@@ -503,17 +503,17 @@ function clause execute(IMUL(wsize, dest, src)) = {
 // Decode IMUL r{16, 32, 64} r/m{16, 32, 64}
 function clause decode_two_byte_instruction(0x0FAF, instruction_ptr, read_offset, decoded_prefixes) = {
     // Get 2 operands of the addressing method + operand type: Operand 1 = Gv, Operand 2 = Ev
-    let (new_read_offset, wsize, rm_operand1, rmi_operand2) = 
+    let (new_read_offset, operand_size, rm_operand1, rmi_operand2) = 
         get_Gv_Ev_operands(instruction_ptr, read_offset, decoded_prefixes);
     // 
     match (rm_operand1, rmi_operand2) {
         // both operands are registers
         (rm_REG(reg_index_1), rmi_REG(reg_index_2)) => {
-            Some(new_read_offset, IMUL(wsize, reg_index_1, rm_REG(reg_index_2)))
+            Some(new_read_offset, IMUL(operand_size, reg_index_1, rm_REG(reg_index_2)))
         },
         // operand 1 is a register and operand 2 is a memory location
         (rm_REG(reg_index), rmi_MEM(mem_loc)) => {
-            Some(new_read_offset, IMUL(wsize, reg_index, rm_MEM(mem_loc)))
+            Some(new_read_offset, IMUL(operand_size, reg_index, rm_MEM(mem_loc)))
         },
         // This case should be unreachable
         _ => {
@@ -550,25 +550,25 @@ function clause decode_one_byte_instruction(0xE8, instruction_ptr, read_offset, 
 
 /* LEAVE */
 
-function clause execute(LEAVE(wsize)) = {
+function clause execute(LEAVE(operand_size)) = {
     /* copy frame pointer (RBP) into the stack pointer register (RSP)
     to release the stack space allocated to the topmost stack frame */
     RSP = RBP;
 
     // pop value from the stack
-    let popped_value = read_operand(false, wsize, rm_MEM(RSP));
+    let popped_value = read_operand(false, operand_size, rm_MEM(RSP));
     // store popped value in RBP
-    write_GPR(wsize, 5, popped_value);
+    write_GPR(operand_size, 5, popped_value);
     // increment stack pointer to free the popped stack space
-    RSP = RSP + (wsize / 8);
+    RSP = RSP + (operand_size / 8);
 }
 
 // Decode LEAVE instruction (operand size = 16 or 64 bits)
 function clause decode_one_byte_instruction(0xC9, instruction_ptr, read_offset, decoded_prefixes) = {
-    // Get wsize. Default wsize is 64 bits. Ignore REX prefix.
-    let wsize = get_wsize_ignoring_REX(decoded_prefixes, 64);
-    assert(wsize == 16 | wsize == 64); // required for type-checking as only LEAVE(16) and LEAVE(64) are allowed instructions
-    Some(read_offset, LEAVE(wsize))
+    // Get operand size. Default is 64 bits. Ignore REX prefix.
+    let operand_size = get_operand_size_ignoring_REX(decoded_prefixes, 64);
+    assert(operand_size == 16 | operand_size == 64); // required for type-checking as only LEAVE(16) and LEAVE(64) are allowed instructions
+    Some(read_offset, LEAVE(operand_size))
 }
 
 /* RET */

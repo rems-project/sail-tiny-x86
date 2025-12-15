@@ -373,6 +373,22 @@ function decode_push_or_pop_rm_operand(instruction_ptr, read_offset, decoded_pre
     let (final_offset, operand) = decode_rm_operand_inner(addressingMethod_E, instruction_ptr, read_offset, mod_rm_byte, wsize, decoded_prefixes.REX);
     (final_offset, wsize, operand)
 }
+
+// Get 2 operands of the addressing method + operand type: Operand 1 = Ev, Operand 2 = Iz
+val get_Ev_Iz_operands: (bits(64), int, decodedPrefixes, modRMByte) -> (int, word_size, rm_operand, imm)
+function get_Ev_Iz_operands(instruction_ptr, read_offset, decoded_prefixes, mod_rm_byte) = {
+    // Get wsize. Default is 32 bits.
+    let wsize = get_wsize_using_REX(decoded_prefixes, 32);
+    // Get r/m operand
+    let (read_offset_2, operand1) = decode_rm_operand_inner(addressingMethod_E, instruction_ptr, read_offset, mod_rm_byte, wsize, decoded_prefixes.REX);
+    // Get imm operand
+    let imm_size = if wsize == 64 then 32 else wsize;
+    let (read_offset_3, imm) = decode_imm_operand(instruction_ptr, read_offset_2, imm_size);
+    // return new read offset, operand size, and operands
+    (read_offset_3, wsize, operand1, imm)
+}
+
+
 /*------------------------------------------------------------------------------
  * DECODE Instruction
  *-----------------------------------------------------------------------------*/

@@ -182,20 +182,20 @@ function get_reg_value_in_opcode_byte(reg_field, REX) = {
 }
 
 // Decode SIB byte (sometimes needed for decoding register or memory operands)
-val decode_sib_byte: forall 'wsize, 'wsize in {8, 16, 32, 64}. (SIBByte, int('wsize), REX) -> bits('wsize)
-function decode_sib_byte(sib_byte, wsize, REX) = {
+val decode_sib_byte: (SIBByte, REX) -> bits(64)
+function decode_sib_byte(sib_byte, REX) = {
     // value stored in the SIB byte is base + index * (2^scale)
     /* Note: if the value stored in the base or index fields of the SIB byte is 5, 
     then we can't read the value stored in this register location, as the index is of the RBP,*/
     let sib_byte_BASE = get_sib_byte_BASE(sib_byte, REX);
     let sib_byte_INDEX = get_sib_byte_INDEX(sib_byte, REX);
-    let base = if sib_byte_BASE == 5 then sail_zero_extend(0x0, wsize) else {
+    let base = if sib_byte_BASE == 5 then sail_zero_extend(0x0, 64) else {
         // base = value stored in this register location
-        read_GPR(wsize, sib_byte_BASE)
+        read_GPR(64, sib_byte_BASE)
     };
-    let index = if sib_byte_INDEX == 4 then sail_zero_extend(0x0, wsize) else {
+    let index = if sib_byte_INDEX == 4 then sail_zero_extend(0x0, 64) else {
         // index = value stored in this register location
-        read_GPR(wsize, sib_byte_INDEX)
+        read_GPR(64, sib_byte_INDEX)
     };
     // return the value stored in the SIB byte, which is base + index * (2^scale)
     add_bits(base, sail_shiftleft(index, unsigned(sib_byte[Scale])))
@@ -242,77 +242,69 @@ function decode_imm_operand(instruction_ptr, read_offset, wsize) = {
 
 // function to decode single r/m operand, given the mod_rm_byte
 // returns the new read offset and the operand
-val decode_rm_operand_inner: (addressingMethod, bits(64), int, modRMByte, word_size, REX) -> (int, rm_operand)
+val decode_rm_operand_inner: (addressingMethod, bits(64), int, modRMByte, REX) -> (int, rm_operand)
 scattered function decode_rm_operand_inner
 
 /* function definition for addressing method E:
  of the mod r/m byte, the mod bits and r/m bits determine the operand */
-function clause decode_rm_operand_inner(addressingMethod_E, instruction_ptr, read_offset, mod_rm_byte, wsize, REX) = {
+function clause decode_rm_operand_inner(addressingMethod_E, instruction_ptr, read_offset, mod_rm_byte, REX) = {
     // read r/m bits (returns register index)
     let reg_used: reg_index = get_mod_rm_byte_RM(mod_rm_byte, REX);
     if mod_rm_byte[Mod] == 0b11 then 
         // the r/m bits specify the register index of the operand
         (read_offset, rm_REG(reg_used))
     else {
-        // TODO: Support operand m16 (mod r/m byte behaviour is not yet supported for 16 bit memory operands)
-        if wsize == 16 then fail("OPERAND SIZE 16 BITS NOT YET SUPPORTED");
-
         // the mod and r/m bits are used to specify a memory location
         var new_read_offset: int = read_offset;
-        var working_val = {
+        var mem_loc: bits(64) = {
             // get original 3-bit register location stored in the mod r/m byte
             let three_bit_reg_used = mod(reg_used, 8) in
             if three_bit_reg_used == 4 then { 
                 // this register value means that we need to decode the SIB byte
-                let sib_value = 
                 let sib_byte: SIBByte = struct {
                     // read SIB byte
                     bits = read_memory(1, instruction_ptr + new_read_offset, create_iFetchAccessDescriptor())
-                } in
-                decode_sib_byte(sib_byte, wsize, REX);
+                };
+                // convert the byte to a value
+                let sib_value = decode_sib_byte(sib_byte, REX);
                 // increment read_offset (add 1 to it)
                 new_read_offset = new_read_offset + 1;
                 // working value is set to the value stored in the SIB byte
                 sib_value
             }
-            else read_GPR(wsize, reg_used) // working value is set to the value stored in the register index we read earlier
+            else read_GPR(64, reg_used) // working value is set to the value stored in the register index we read earlier
         };
         match mod_rm_byte[Mod] {
             0b01 => {
-                // we need to add an 8 bit displacement value to our working value
+                // we need to add an 8 bit displacement value to mem_loc
                 // fetch the 8 bit displacement
                 let displacement = read_memory(1, instruction_ptr + new_read_offset, create_iFetchAccessDescriptor());
-                // sign-extend the 8 bit displacement, then add it to our working value
-                working_val = add_bits(working_val, sail_sign_extend(displacement, wsize));
+                // sign-extend the 8 bit displacement, then add it to mem_loc
+                mem_loc = add_bits(mem_loc, sail_sign_extend(displacement, 64));
                 // increment read offset
                 new_read_offset = new_read_offset + 1;
             },
             0b10 => {
-                // we need to add a wsize bit displacement to our working value. 
-                // But if wsize is 64, then our displacement is a sign-extended 32-bit displacement
-                let wsize_bytes = if wsize >= 32 then 32 / 8 else wsize / 8;
-                assert(wsize_bytes > 0 & wsize >= 8 * wsize_bytes); // required for type-checking because of the wsize = 64 case
-                // fetch the displacement
-                let displacement = read_memory(wsize_bytes, instruction_ptr + new_read_offset, create_iFetchAccessDescriptor());
-                // add it to our working value. If wsize is 64, then our displacement is a sign-extended 32-bit displacement
-                working_val = add_bits(working_val, sail_sign_extend(displacement, wsize));
+                // we need to add a sign-extended 32-bit displacement to mem_loc
+                // fetch the 32 bit (4 byte) displacement
+                let displacement = read_memory(4, instruction_ptr + new_read_offset, create_iFetchAccessDescriptor());
+                // sign-extend the 32 bit displacement, then add it to mem_loc
+                mem_loc = add_bits(mem_loc, sail_sign_extend(displacement, 64));
                 // increment read offset
-                new_read_offset = new_read_offset + wsize_bytes;
+                new_read_offset = new_read_offset + 4;
             },
-            // if our mod bits are 00, then we don't add a displacement to our working value
+            // if our mod bits are 00, then we don't add a displacement to mem_loc
             // this match statement is not reachable for mod bits = 11
             _ => () 
         };
-        // zero-extend to 64 bits to get a valid memory address in 64-bit mode
-        let final_val = sail_zero_extend(working_val, 64) in
         // return the new read offset and decoded operand
-        (new_read_offset, rm_MEM(final_val))
+        (new_read_offset, rm_MEM(mem_loc))
     }
 }
 
 /* function definition for addressing method E:
  of the mod r/m byte, the reg bits determine the register index of the operand */
-function clause decode_rm_operand_inner(addressingMethod_G, instruction_ptr, read_offset, mod_rm_byte, wsize, REX) = {
+function clause decode_rm_operand_inner(addressingMethod_G, instruction_ptr, read_offset, mod_rm_byte, REX) = {
     // read reg bits of the mod r/m byte
     let reg_index = get_mod_rm_byte_REG(mod_rm_byte, REX) in
     // return the read offset and decoded operand
@@ -321,11 +313,11 @@ function clause decode_rm_operand_inner(addressingMethod_G, instruction_ptr, rea
 
 // function to decode 2 register or memory operands
 // returns the new read offset, operand1, and operand2
-val decode_2_rm_operands: (bits(64), int, operandAttributes, operandAttributes, REX) -> (int, rm_operand, rmi_operand)
-function decode_2_rm_operands(instruction_ptr, read_offset, operand1_attr, operand2_attr, REX) = {
+val decode_2_rm_operands: (bits(64), int, addressingMethod, addressingMethod, REX) -> (int, rm_operand, rmi_operand)
+function decode_2_rm_operands(instruction_ptr, read_offset, operand1_addr_method, operand2_addr_method, REX) = {
     let (new_offset, mod_rm_byte) = read_mod_rm_byte(instruction_ptr, read_offset);
-    let (new_offset2, operand1) = decode_rm_operand_inner(operand1_attr.addressing_method, instruction_ptr, new_offset, mod_rm_byte, operand1_attr.wsize, REX);
-    let (new_offset3, working_operand2) = decode_rm_operand_inner(operand2_attr.addressing_method, instruction_ptr, new_offset2, mod_rm_byte, operand2_attr.wsize, REX);
+    let (new_offset2, operand1) = decode_rm_operand_inner(operand1_addr_method, instruction_ptr, new_offset, mod_rm_byte, REX);
+    let (new_offset3, working_operand2) = decode_rm_operand_inner(operand2_addr_method, instruction_ptr, new_offset2, mod_rm_byte, REX);
     let operand2: rmi_operand = match working_operand2 {
         rm_REG(value) => rmi_REG(value),
         rm_MEM(value) => rmi_MEM(value)
@@ -340,17 +332,9 @@ val get_2_type_v_operands: (bits(64), int, addressingMethod, addressingMethod, d
 function get_2_type_v_operands(instruction_ptr, read_offset, operand1_addr_method, operand2_addr_method, decoded_prefixes) = {
     // the operand type is v, so wsize is determined by the operand size. Default wsize is 32 bits.
     let wsize = get_wsize_using_REX(decoded_prefixes, 32);
-    // use operand attributes (containing addressing mode and word size) to decode operands
-    let operand1_attr: operandAttributes = struct {
-        addressing_method = operand1_addr_method,
-        wsize = wsize
-    };
-    let operand2_attr: operandAttributes = struct {
-        addressing_method = operand2_addr_method,
-        wsize = wsize
-    };
+    // decode operands
     let (new_read_offset, operand1, operand2) = 
-        decode_2_rm_operands(instruction_ptr, read_offset, operand1_attr, operand2_attr, decoded_prefixes.REX);
+        decode_2_rm_operands(instruction_ptr, read_offset, operand1_addr_method, operand2_addr_method, decoded_prefixes.REX);
     (new_read_offset, wsize, operand1, operand2)
 }
 
@@ -370,7 +354,7 @@ function decode_push_or_pop_rm_operand(instruction_ptr, read_offset, decoded_pre
     // Get wsize. Default wsize is 64 bits. Ignore REX.
     let wsize = get_wsize_ignoring_REX(decoded_prefixes, 64);
     // Decode operand. Operand addressing method + operand type is Ev
-    let (final_offset, operand) = decode_rm_operand_inner(addressingMethod_E, instruction_ptr, read_offset, mod_rm_byte, wsize, decoded_prefixes.REX);
+    let (final_offset, operand) = decode_rm_operand_inner(addressingMethod_E, instruction_ptr, read_offset, mod_rm_byte, decoded_prefixes.REX);
     (final_offset, wsize, operand)
 }
 
@@ -380,7 +364,7 @@ function get_Ev_Iz_operands(instruction_ptr, read_offset, decoded_prefixes, mod_
     // Get wsize. Default is 32 bits.
     let wsize = get_wsize_using_REX(decoded_prefixes, 32);
     // Get r/m operand
-    let (read_offset_2, operand1) = decode_rm_operand_inner(addressingMethod_E, instruction_ptr, read_offset, mod_rm_byte, wsize, decoded_prefixes.REX);
+    let (read_offset_2, operand1) = decode_rm_operand_inner(addressingMethod_E, instruction_ptr, read_offset, mod_rm_byte, decoded_prefixes.REX);
     // Get imm operand
     let imm_size = if wsize == 64 then 32 else wsize;
     let (read_offset_3, imm) = decode_imm_operand(instruction_ptr, read_offset_2, imm_size);

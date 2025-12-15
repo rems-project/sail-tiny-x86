@@ -45,7 +45,6 @@ bitfield SIBByte: bits(8) = {
 struct decodedPrefixes = {
     lock: bool, // encoding is F0 (hex)
     op_size_override: bool, // encoding is 66 (hex)
-    addr_size_override: bool, // encoding is 67 (hex)
     mandatory_prefix_66H: bool, // encoding is 66 (hex) + must occur right before opcode or REX prefix
     REX: REX // encoding is 0100WRXB (binary) + must occur right before opcode
 }
@@ -54,11 +53,6 @@ struct decodedPrefixes = {
 enum addressingMethod = { 
     addressingMethod_E, 
     addressingMethod_G
-}
-
-struct operandAttributes = {
-    addressing_method: addressingMethod,
-    wsize: word_size
 }
 
 /*------------------------------------------------------------------------------
@@ -110,15 +104,6 @@ function decode_prefix_inner(instruction_ptr, read_offset, decoded_prefixes, pre
         // set the corresponding fields to true
         let new_decoded_prefixes = {reset_decoded_prefixes with op_size_override = true, mandatory_prefix_66H = true} in
         // check for more prefixes
-            decode_prefix_inner(instruction_ptr, read_offset + 1, new_decoded_prefixes, next_prefix)
-    }
-    // if we have a address size override (to 16 bits) prefix
-    else if next_prefix == 0x67 then {
-        // (reset placement-dependent prefixes)
-        let reset_decoded_prefixes = reset_prefixes_not_at_end(decoded_prefixes) in
-        // set addr_size_override to true
-        let new_decoded_prefixes = {reset_decoded_prefixes with addr_size_override = true} in
-        // heck for more prefixes
             decode_prefix_inner(instruction_ptr, read_offset + 1, new_decoded_prefixes, next_prefix)
     }
     // if we have a REX prefix
@@ -226,10 +211,12 @@ function get_wsize_ignoring_REX(decoded_prefixes, default_wsize) = {
     if decoded_prefixes.op_size_override then 16
     else default_wsize
 }
-val decode_imm_operand: (bits(64), int, word_size) -> (int, imm)
-function decode_imm_operand(instruction_ptr, read_offset, wsize) = {
+
+// Read and decode immediate operand
+val read_imm_operand: (bits(64), int, word_size) -> (int, imm)
+function read_imm_operand(instruction_ptr, read_offset, wsize) = {
     let wsize_bytes = wsize / 8;
-    assert(wsize_bytes > 0 & wsize == 8 * wsize_bytes); // required for type-checking
+    assert(wsize == 8 * wsize_bytes); // required for type-checking
     let imm_value = read_memory(wsize_bytes, instruction_ptr + read_offset, create_iFetchAccessDescriptor());
     let wrapped_imm: imm = match wsize {
         8 => IMM8(imm_value),
@@ -272,7 +259,8 @@ function clause decode_rm_operand_inner(addressingMethod_E, instruction_ptr, rea
                 // working value is set to the value stored in the SIB byte
                 sib_value
             }
-            else read_GPR(64, reg_used) // working value is set to the value stored in the register index we read earlier
+            // else working value is set to the value stored in the register index that we read earlier
+            else read_GPR(64, reg_used)
         };
         match mod_rm_byte[Mod] {
             0b01 => {
@@ -367,7 +355,7 @@ function get_Ev_Iz_operands(instruction_ptr, read_offset, decoded_prefixes, mod_
     let (read_offset_2, operand1) = decode_rm_operand_inner(addressingMethod_E, instruction_ptr, read_offset, mod_rm_byte, decoded_prefixes.REX);
     // Get imm operand
     let imm_size = if wsize == 64 then 32 else wsize;
-    let (read_offset_3, imm) = decode_imm_operand(instruction_ptr, read_offset_2, imm_size);
+    let (read_offset_3, imm) = read_imm_operand(instruction_ptr, read_offset_2, imm_size);
     // return new read offset, operand size, and operands
     (read_offset_3, wsize, operand1, imm)
 }
@@ -417,7 +405,6 @@ function decode(instruction_ptr) = {
     var decoded_prefixes: decodedPrefixes = struct { 
         lock = false, 
         op_size_override = false, 
-        addr_size_override = false,
         mandatory_prefix_66H = false,
         REX = struct {bits = 0x00}
     };

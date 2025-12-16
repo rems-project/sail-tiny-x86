@@ -382,6 +382,17 @@ function get_Ev_Iz_operands(instruction_ptr, read_offset, decoded_prefixes, mod_
     (read_offset_3, operand_size, operand1, imm)
 }
 
+// Get 2 operands of the addressing method + operand type: Operand 1 = Ev, Operand 2 = Iz
+val get_Eb_Ib_operands: (bits(64), int, REX, modRMByte) -> (int, rm_operand, imm)
+function get_Eb_Ib_operands(instruction_ptr, read_offset, REX, mod_rm_byte) = {
+    // Get r/m operand
+    let (read_offset_2, operand1) = decode_rm_operand_inner(addressingMethod_E, instruction_ptr, read_offset, mod_rm_byte, 8, REX);
+    // Get imm operand
+    let (read_offset_3, imm) = read_imm_operand(instruction_ptr, read_offset_2, 8);
+    // return new read offset and operands
+    (read_offset_3, operand1, imm)
+}
+
 
 /*------------------------------------------------------------------------------
  * DECODE Instruction

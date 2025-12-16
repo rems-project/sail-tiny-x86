@@ -430,7 +430,7 @@ function decode_instruction(instruction_ptr, read_offset, decoded_prefixes) = {
 }
 
 // base decode function: decode the prefix and then the main instruction
-val decode: bits(64) -> (bits(64), ast)
+val decode: bits(64) -> option((bits(64), ast))
 function decode(instruction_ptr) = {
     // keep a counter of how many bytes of the instruction we have read so far
     var read_offset: int = 0;
@@ -448,10 +448,7 @@ function decode(instruction_ptr) = {
     // decode rest of instruction
     let res = decode_instruction(instruction_ptr, read_offset, decoded_prefixes);
     match res {
-        None() => {
-            fail("Invalid instruction");
-            (instruction_ptr, LEAVE(64)) // this line should not be reachable, needed to keep return type consistent
-        },
+        None() => None(),
         Some(offset, instruction) => {
             if offset > 15 then fail("Instruction is longer than 15 bytes, hence is not valid");
             
@@ -464,7 +461,24 @@ function decode(instruction_ptr) = {
                 _ => ()
             };
             
-            (instruction_ptr + offset, instruction)
+            Some(instruction_ptr + offset, instruction)
+        }
+    }
+}
+
+val execute : ast -> unit
+scattered function execute
+
+val fetch_execute: unit -> unit
+function fetch_execute() = {
+    let decoded = decode(RIP);
+    match decoded {
+        Some(new_RIP, instr) => {
+            RIP = new_RIP;
+            execute(instr)
+        },
+        None() => {
+            fail("Instruction is either not implemented in this model, reserved, or malformed.")
         }
     }
 }

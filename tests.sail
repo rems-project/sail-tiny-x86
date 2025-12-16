@@ -141,12 +141,24 @@ function write_instruction_to_memory(m, inst, instruction_ptr) = {
   write_memory(m, instruction_ptr, res, create_writeAccessDescriptor())
 }
 
+// rough function (only for rough testing) that returns new rip and instruction if it exists, or a random rip and instruction if it doesn't
+val unwrap_decoded_instr: option((bits(64), ast)) -> (bits(64), ast)
+function unwrap_decoded_instr(res) = {
+  match res {
+    Some(new_RIP, instr) => (new_RIP, instr),
+    None() => {
+      fail("Instruction not decodable by the model");
+      (sail_zero_extend(0x0, 64), RET()) // placeholder values
+    }
+  }
+}
+
 function decode_mov_rm32_r32() -> unit = {
   // Testing that MOV RBP, RSP is decoded correctly
   let old_rip = RIP;
   let instruction: bits(16) = 0x89 @ 0b11_100_101;
   write_instruction_to_memory(instruction, RIP);
-  let (new_rip, decoded_instruction) = decode(RIP);
+  let (new_rip, decoded_instruction) = unwrap_decoded_instr(decode(RIP));
   assert(decoded_instruction == MOV(32, rm_REG(REG_NORMAL(5)), rmi_REG(REG_NORMAL(4))), "MOV(32, rm32, r32) instruction not decoded properly");
 }
 
@@ -157,7 +169,7 @@ function decode_mov_r64_rm64() -> unit = {
   write_instruction_to_memory(instruction, RIP);
   write_GPR(64, REG_NORMAL(5 + 8), 0xFEDC_BA98_7654_3210);
   let expected_rmi_MEM = read_GPR(64, REG_NORMAL(5 + 8));
-  let (new_rip, decoded_instruction) = decode(RIP);
+  let (new_rip, decoded_instruction) = unwrap_decoded_instr(decode(RIP));
   assert(decoded_instruction == MOV(64, rm_REG(REG_NORMAL(4 + 8)), rmi_MEM(expected_rmi_MEM)), "MOV(64, r64, rm64) instruction not decoded properly");
 }
 
@@ -170,7 +182,7 @@ function decode_push_imm16() -> unit = {
   let imm = 0x4567;
   write_memory(2, RIP + 2, imm, create_writeAccessDescriptor());
   // Decode and test
-  let (new_rip, decoded_instruction) = decode(RIP);
+  let (new_rip, decoded_instruction) = unwrap_decoded_instr(decode(RIP));
   assert(decoded_instruction == PUSH(16, rmi_IMM(IMM16(0x4567))), "PUSH(16, imm16) instruction not decoded properly");
 }
 
@@ -184,7 +196,7 @@ function decode_push_m64() -> unit = {
   // Calculate expected memory address ([RDI] + 0xFF (sign-extended))
   let expected_mem_address = add_bits(read_GPR(64, REG_NORMAL(7)), sail_sign_extend(0xFF, 64));
   // Decode and test
-  let (new_rip, decoded_instruction) = decode(RIP);
+  let (new_rip, decoded_instruction) = unwrap_decoded_instr(decode(RIP));
   assert(decoded_instruction == PUSH(64, rmi_MEM(expected_mem_address)), "PUSH(64, m64) instruction not decoded properly");
 }
 
@@ -194,7 +206,7 @@ function decode_push_r16() -> unit = {
   let instruction: bits(24) = 0x66 @ 0b0100_0001 @ 0x5 @ 0b0 @ 0b000;
   write_instruction_to_memory(instruction, RIP);
   // Decode and test
-  let (new_rip, decoded_instruction) = decode(RIP);
+  let (new_rip, decoded_instruction) = unwrap_decoded_instr(decode(RIP));
   assert(decoded_instruction == PUSH(16, rmi_REG(REG_NORMAL(8))), "PUSH(16, r16) instruction not decoded properly")
 }
 
@@ -204,7 +216,7 @@ function decode_pop_r16() -> unit = {
   let instruction: bits(24) = 0x66 @ 0x8F @ 0b11_000_110;
   write_instruction_to_memory(instruction, RIP);
   // Decode and test
-  let (new_rip, decoded_instruction) = decode(RIP);
+  let (new_rip, decoded_instruction) = unwrap_decoded_instr(decode(RIP));
   assert(decoded_instruction == POP(16, rm_REG(REG_NORMAL(6))), "POP(16, r16) not decoded properly")
 }
 
@@ -214,7 +226,7 @@ function decode_pop_r64() -> unit = {
   let instruction: bits(16) = 0b0100_0000 @ 0x5 @ 0b1 @ 0b000;
   write_instruction_to_memory(instruction, RIP);
   // Decode and test
-  let (new_rip, decoded_instruction) = decode(RIP);
+  let (new_rip, decoded_instruction) = unwrap_decoded_instr(decode(RIP));
   assert(decoded_instruction == POP(64, rm_REG(REG_NORMAL(0))), "POP(64, r64) not decoded properly")
 }
 

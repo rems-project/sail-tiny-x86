@@ -176,7 +176,7 @@ The exact instruction encoded is specified in the reg field of the mod r/m byte.
 Out of all instructions with opcodes 80 and 81, we currently only support the ADD, SUB, XOR and CMP instructions. */
 function clause decode_one_byte_instruction(0b1000_000 @ not_8_bit, instruction_ptr, read_offset, decoded_prefixes) = {
     // fetch mod r/m byte
-    let (read_offset_2, mod_rm_byte) = read_mod_rm_byte(instruction_ptr, read_offset);
+    let (read_offset, mod_rm_byte) = read_mod_rm_byte(instruction_ptr, read_offset);
 
     // get operands
     let (new_read_offset, operand_size, operand1, imm) = {
@@ -185,7 +185,7 @@ function clause decode_one_byte_instruction(0b1000_000 @ not_8_bit, instruction_
             get_Ev_Iz_operands(instruction_ptr, read_offset, decoded_prefixes, mod_rm_byte)
         else {
             // Get 2 operands of the addressing method + operand type: Operand 1 = Eb, Operand 2 = Ib
-            let (new_read_offset, operand1, imm) = get_Eb_Ib_operands(instruction_ptr, read_offset_2, decoded_prefixes.REX, mod_rm_byte);
+            let (new_read_offset, operand1, imm) = get_Eb_Ib_operands(instruction_ptr, read_offset, decoded_prefixes.REX, mod_rm_byte);
             (new_read_offset, 8, operand1, imm)
         }
     };

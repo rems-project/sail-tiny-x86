@@ -228,13 +228,13 @@ function clause decode_two_byte_instruction(0x0FAE, instruction_ptr, read_offset
             0b101 => {
                 // LFENCE
                 // Use of 66 / F2 / F3 prefixes are not allowed in the instruction. Only prefix 66 has been implemented in this model.
-                if decoded_prefixes.op_size_override then fail("Prefix 66H is not allowed in the SFENCE instruction");
+                if decoded_prefixes.op_size_override then fail("Prefix 66H is not allowed in the LFENCE instruction");
                 Some(new_read_offset, LFENCE())
             },
             0b110 => {
                 // MFENCE
                 // Use of 66 / F2 / F3 prefixes are not allowed in the instruction. Only prefix 66 has been implemented in this model.
-                if decoded_prefixes.op_size_override then fail("Prefix 66H is not allowed in the SFENCE instruction");
+                if decoded_prefixes.op_size_override then fail("Prefix 66H is not allowed in the MFENCE instruction");
                 Some(new_read_offset, MFENCE())
             },
             _ => {

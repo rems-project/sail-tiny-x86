@@ -28,7 +28,7 @@ function clause execute(MOV(operand_size, dest, src)) = {
 
 // Decode MOV r/m8 r8
 function clause decode_one_byte_instruction(0x88, instruction_ptr, read_offset, decoded_prefixes) = {
-    // get 2 operands of the addressing method + operand type: Operand 1 = Ev, Operand 2 = Gv
+    // get 2 operands of the addressing method + operand type: Operand 1 = Eb, Operand 2 = Gb
     let (new_read_offset, operand1, operand2) = get_Eb_Gb_operands(instruction_ptr, read_offset, decoded_prefixes.REX);
     // return new read offset and decoded instruction
     Some(new_read_offset, MOV(8, operand1, operand2))
@@ -42,7 +42,15 @@ function clause decode_one_byte_instruction(0x89, instruction_ptr, read_offset, 
     Some(new_read_offset, MOV(operand_size, operand1, operand2))
 }
 
-// Decode MOV r{32, 64}, r/m{32, 64}
+// Decode MOV r8, r/m8
+function clause decode_one_byte_instruction(0x8A, instruction_ptr, read_offset, decoded_prefixes) = {
+    // get 2 operands of the addressing method + operand type: Operand 1 = Gb, Operand 2 = Eb
+    let (new_read_offset, operand1, operand2) = get_Gb_Eb_operands(instruction_ptr, read_offset, decoded_prefixes.REX);
+    // return new read offset and decoded instruction
+    Some(new_read_offset, MOV(8, operand1, operand2))
+}
+
+// Decode MOV r{16, 32, 64}, r/m{16, 32, 64}
 function clause decode_one_byte_instruction(0x8B, instruction_ptr, read_offset, decoded_prefixes) = {
     // get 2 operands of the addressing method + operand type: Operand 1 = Gv, Operand 2 = Ev
     let (new_read_offset, operand_size, operand1, operand2) = get_Gv_Ev_operands(instruction_ptr, read_offset, decoded_prefixes);
@@ -50,31 +58,50 @@ function clause decode_one_byte_instruction(0x8B, instruction_ptr, read_offset, 
     Some(new_read_offset, MOV(operand_size, operand1, operand2))
 }
 
-// Decode MOV r{16, 32, 64} imm{16, 32, 64}
-function clause decode_one_byte_instruction(0xB @ 0b1 @ reg_field, instruction_ptr, read_offset, decoded_prefixes) = {
+// Decode MOV r{8, 16, 32, 64} imm{8, 16, 32, 64}
+function clause decode_one_byte_instruction(0xB @ not_8_bit: bits(1) @ reg_field, instruction_ptr, read_offset, decoded_prefixes) = {
     // get register location embedded in the opcode
     let reg_index = get_reg_value_in_opcode_byte(reg_field, decoded_prefixes.REX);
-    let reg = REG_NORMAL(reg_index);
-    // Get operand_size. Default is 32 bits.
-    let operand_size = get_operand_size_using_REX(decoded_prefixes, 32);
+    let reg = 
+        if not_8_bit == 0b1 then
+            REG_NORMAL(reg_index)
+        else
+            wrap_reg(reg_index, 8, decoded_prefixes.REX);
+    // Get operand_size. 
+    let operand_size = 
+        if not_8_bit == 0b1 then
+            // Default is 32 bits.
+            get_operand_size_using_REX(decoded_prefixes, 32)
+        else
+            8;
     // get imm operand
     let (new_read_offset, imm) = read_imm_operand(instruction_ptr, read_offset, operand_size);
     // return new read offset and decoded instruction
     Some(new_read_offset, MOV(operand_size, rm_REG(reg), rmi_IMM(imm)))
 }
 
-// Decode MOV r/m{16, 32, 64} imm{16, 32, 32}
-/* WARNING: Opcode C7 encodes a group of instructions. The exact instruction encoded is specified in the reg field of the mod r/m byte.
-Out of all instructions with opcode C7, we currently only support the MOV instruction. */
-function clause decode_one_byte_instruction(0xC7, instruction_ptr, read_offset, decoded_prefixes) = {
+// Decode MOV r/m{8, 16, 32, 64} imm{8, 16, 32, 32}
+/* WARNING: Opcodes C6 (r/m8 imm8) and C7 (all others) encode a group of instructions. 
+The exact instruction encoded is specified in the reg field of the mod r/m byte.
+Out of all instructions with opcodes C6 and C7, we currently only support the MOV instruction. */
+function clause decode_one_byte_instruction(0b1100_110 @ not_8_bit, instruction_ptr, read_offset, decoded_prefixes) = {
     // fetch mod r/m byte
     let (read_offset_2, mod_rm_byte) = read_mod_rm_byte(instruction_ptr, read_offset);
 
     // If the opcode extension does not point to a MOV instruction then fail
     if unsigned(mod_rm_byte[REG]) != 0 then fail("The instruction to be decoded is either reserved or not implemented in this model");
 
-    // Get 2 operands of the addressing method + operand type: Operand 1 = Ev, Operand 2 = Iz
-    let (new_read_offset, operand_size, operand1, imm) = get_Ev_Iz_operands(instruction_ptr, read_offset, decoded_prefixes, mod_rm_byte);
+    // Get operands
+    let (new_read_offset, operand_size, operand1, imm) = {
+        if not_8_bit == 0b1 then
+            // Get 2 operands of the addressing method + operand type: Operand 1 = Ev, Operand 2 = Iz
+            get_Ev_Iz_operands(instruction_ptr, read_offset, decoded_prefixes, mod_rm_byte)
+        else {
+            // Get 2 operands of the addressing method + operand type: Operand 1 = Eb, Operand 2 = Ib
+            let (new_read_offset, operand1, imm) = get_Eb_Ib_operands(instruction_ptr, read_offset, decoded_prefixes.REX, mod_rm_byte);
+            (new_read_offset, 8, operand1, imm)
+        }
+    };
 
     // return new read offset and decoded instruction
     Some(new_read_offset, MOV(operand_size, operand1, rmi_IMM(imm)))
@@ -114,7 +141,15 @@ function clause execute(XOR(lock, operand_size, dest, src)) = {
     update_parity_flag(result);
 }
 
-// Decode XOR r/m{32, 64}, r{32, 64}
+// Decode XOR r/m8, r8
+function clause decode_one_byte_instruction(0x30, instruction_ptr, read_offset, decoded_prefixes) = {
+    // get 2 operands of the addressing method + operand type: Operand 1 = Eb, Operand 2 = Gb
+    let (new_read_offset, operand1, operand2) = get_Eb_Gb_operands(instruction_ptr, read_offset, decoded_prefixes.REX);
+    // return new read offset and decoded instruction
+    Some(new_read_offset, XOR(decoded_prefixes.lock, 8, operand1, operand2))
+}
+
+// Decode XOR r/m{16, 32, 64}, r{16, 32, 64}
 function clause decode_one_byte_instruction(0x31, instruction_ptr, read_offset, decoded_prefixes) = {
     // get 2 operands of the addressing method + operand type: Operand 1 = Ev, Operand 2 = Gv
     let (new_read_offset, operand_size, operand1, operand2) = get_Ev_Gv_operands(instruction_ptr, read_offset, decoded_prefixes);
@@ -122,7 +157,15 @@ function clause decode_one_byte_instruction(0x31, instruction_ptr, read_offset, 
     Some(new_read_offset, XOR(decoded_prefixes.lock, operand_size, operand1, operand2))
 }
 
-// Decode XOR r{32, 64}, r/m{32, 64}
+// Decode XOR r8, r/m8
+function clause decode_one_byte_instruction(0x32, instruction_ptr, read_offset, decoded_prefixes) = {
+    // get 2 operands of the addressing method + operand type: Operand 1 = Gb, Operand 2 = Eb
+    let (new_read_offset, operand1, operand2) = get_Gb_Eb_operands(instruction_ptr, read_offset, decoded_prefixes.REX);
+    // return new read offset and decoded instruction
+    Some(new_read_offset, XOR(decoded_prefixes.lock, 8, operand1, operand2))
+}
+
+// Decode XOR r{16, 32, 64}, r/m{16, 32, 64}
 function clause decode_one_byte_instruction(0x33, instruction_ptr, read_offset, decoded_prefixes) = {
     // get 2 operands of the addressing method + operand type: Operand 1 = Gv, Operand 2 = Ev
     let (new_read_offset, operand_size, operand1, operand2) = get_Gv_Ev_operands(instruction_ptr, read_offset, decoded_prefixes);
@@ -130,15 +173,25 @@ function clause decode_one_byte_instruction(0x33, instruction_ptr, read_offset, 
     Some(new_read_offset, XOR(decoded_prefixes.lock, operand_size, operand1, operand2))
 }
 
-// Decode XOR, ADD, SUB, CMP r/m{16, 32, 64} imm{16, 32, 32}
-/* WARNING: Opcode 81 encodes a group of instructions. The exact instruction encoded is specified in the reg field of the mod r/m byte.
-Out of all instructions with opcode 81, we currently only support the ADD, SUB, XOR and CMP instructions. */
-function clause decode_one_byte_instruction(0x81, instruction_ptr, read_offset, decoded_prefixes) = {
+// Decode XOR, ADD, SUB, CMP r/m{8, 16, 32, 64} imm{8, 16, 32, 32}
+/* WARNING: Opcodes 80 (r/m8 r8) and 81 (all others) encode a group of instructions. 
+The exact instruction encoded is specified in the reg field of the mod r/m byte.
+Out of all instructions with opcodes 80 and 81, we currently only support the ADD, SUB, XOR and CMP instructions. */
+function clause decode_one_byte_instruction(0b1000_000 @ not_8_bit, instruction_ptr, read_offset, decoded_prefixes) = {
     // fetch mod r/m byte
     let (read_offset_2, mod_rm_byte) = read_mod_rm_byte(instruction_ptr, read_offset);
 
-    // Get 2 operands of the addressing method + operand type: Operand 1 = Ev, Operand 2 = Iz
-    let (new_read_offset, operand_size, operand1, imm) = get_Ev_Iz_operands(instruction_ptr, read_offset, decoded_prefixes, mod_rm_byte);
+    // get operands
+    let (new_read_offset, operand_size, operand1, imm) = {
+        if not_8_bit == 0b1 then
+            // Get 2 operands of the addressing method + operand type: Operand 1 = Ev, Operand 2 = Iz
+            get_Ev_Iz_operands(instruction_ptr, read_offset, decoded_prefixes, mod_rm_byte)
+        else {
+            // Get 2 operands of the addressing method + operand type: Operand 1 = Eb, Operand 2 = Ib
+            let (new_read_offset, operand1, imm) = get_Eb_Ib_operands(instruction_ptr, read_offset, decoded_prefixes.REX, mod_rm_byte);
+            (new_read_offset, 8, operand1, imm)
+        }
+    };
     
     // Match to instruction based on opcode extension.
     // Return new read offset and decoded instruction
@@ -250,7 +303,15 @@ function clause execute(CMP(operand_size, first, second)) = {
     update_parity_flag(result);
 }
 
-// Decode CMP r/m{32, 64}, r{32, 64}
+// Decode CMP r/m8, r8
+function clause decode_one_byte_instruction(0x38, instruction_ptr, read_offset, decoded_prefixes) = {
+    // addressing method + operand type: Eb, Gb
+    let (new_read_offset, operand1, operand2) = 
+        get_Eb_Gb_operands(instruction_ptr, read_offset, decoded_prefixes.REX);
+    Some(new_read_offset, CMP(8, operand1, operand2))
+}
+
+// Decode CMP r/m{16, 32, 64}, r{16, 32, 64}
 function clause decode_one_byte_instruction(0x39, instruction_ptr, read_offset, decoded_prefixes) = {
     // addressing method + operand type: Ev, Gv
     let (new_read_offset, operand_size, operand1, operand2) = 
@@ -258,7 +319,15 @@ function clause decode_one_byte_instruction(0x39, instruction_ptr, read_offset, 
     Some(new_read_offset, CMP(operand_size, operand1, operand2))
 }
 
-// Decode CMP r{32, 64}, r/m{32, 64}
+// Decode CMP r8, r/m8
+function clause decode_one_byte_instruction(0x3A, instruction_ptr, read_offset, decoded_prefixes) = {
+    // addressing method + operand type: Gb, Eb
+    let (new_read_offset, operand1, operand2) = 
+        get_Gb_Eb_operands(instruction_ptr, read_offset, decoded_prefixes.REX);
+    Some(new_read_offset, CMP(8, operand1, operand2))
+}
+
+// Decode CMP r{16, 32, 64}, r/m{16, 32, 64}
 function clause decode_one_byte_instruction(0x3B, instruction_ptr, read_offset, decoded_prefixes) = {
     // addressing method + operand type: Gv, Ev
     let (new_read_offset, operand_size, operand1, operand2) = 
@@ -266,7 +335,7 @@ function clause decode_one_byte_instruction(0x3B, instruction_ptr, read_offset, 
     Some(new_read_offset, CMP(operand_size, operand1, operand2))
 }
 
-// Decode CMP r/m{16, 32, 64} imm{16, 32, 32} is located in the XOR section
+// Decode CMP r/m{8, 16, 32, 64} imm{8, 16, 32, 32} is located in the XOR section
 
 /* PUSH */
 
@@ -304,7 +373,7 @@ function clause decode_one_byte_instruction(0x68, instruction_ptr, read_offset, 
     Some(new_read_offset, PUSH(operand_size, rmi_IMM(imm)))
 }
 
-// Decode PUSH r/m64 (r/m16 not yet supported)
+// Decode PUSH r/m{16, 64}
 /* WARNING: Opcode FF encodes a group of instructions. The exact instruction encoded is specified in the reg field of the mod r/m byte.
 Out of all instructions with opcode FF, we currently only support the PUSH instruction. */
 function clause decode_one_byte_instruction(0xFF, instruction_ptr, read_offset, decoded_prefixes) = {
@@ -358,7 +427,7 @@ function clause execute(POP(operand_size, dest)) = {
     RSP = RSP + 8;
 }
 
-// Decode POP r/m64 (r/m16 not yet supported)
+// Decode POP r/m{16, 64}
 function clause decode_one_byte_instruction(0x8F, instruction_ptr, read_offset, decoded_prefixes) = {
     // fetch mod r/m byte
     let (new_read_offset, mod_rm_byte) = read_mod_rm_byte(instruction_ptr, read_offset);
@@ -412,7 +481,15 @@ function clause execute(ADD(lock, operand_size, dest, src)) = {
     update_parity_flag(result);
 }
 
-// Decode ADD r/m{32, 64}, r{32, 64}
+// Decode ADD r/m8, r8
+function clause decode_one_byte_instruction(0x00, instruction_ptr, read_offset, decoded_prefixes) = {
+    // get 2 operands of the addressing method + operand type: Operand 1 = Eb, Operand 2 = Gb
+    let (new_read_offset, operand1, operand2) = get_Eb_Gb_operands(instruction_ptr, read_offset, decoded_prefixes.REX);
+    // return new read offset and decoded instruction
+    Some(new_read_offset, ADD(decoded_prefixes.lock, 8, operand1, operand2))
+}
+
+// Decode ADD r/m{16, 32, 64}, r{16, 32, 64}
 function clause decode_one_byte_instruction(0x01, instruction_ptr, read_offset, decoded_prefixes) = {
     // get 2 operands of the addressing method + operand type: Operand 1 = Ev, Operand 2 = Gv
     let (new_read_offset, operand_size, operand1, operand2) = get_Ev_Gv_operands(instruction_ptr, read_offset, decoded_prefixes);
@@ -420,7 +497,15 @@ function clause decode_one_byte_instruction(0x01, instruction_ptr, read_offset, 
     Some(new_read_offset, ADD(decoded_prefixes.lock, operand_size, operand1, operand2))
 }
 
-// Decode ADD r{32, 64}, r/m{32, 64}
+// Decode ADD r8, r/m8
+function clause decode_one_byte_instruction(0x02, instruction_ptr, read_offset, decoded_prefixes) = {
+    // get 2 operands of the addressing method + operand type: Operand 1 = Gb, Operand 2 = Eb
+    let (new_read_offset, operand1, operand2) = get_Gb_Eb_operands(instruction_ptr, read_offset, decoded_prefixes.REX);
+    // return new read offset and decoded instruction
+    Some(new_read_offset, ADD(decoded_prefixes.lock, 8, operand1, operand2))
+}
+
+// Decode ADD r{16, 32, 64}, r/m{16, 32, 64}
 function clause decode_one_byte_instruction(0x03, instruction_ptr, read_offset, decoded_prefixes) = {
     // get 2 operands of the addressing method + operand type: Operand 1 = Gv, Operand 2 = Ev
     let (new_read_offset, operand_size, operand1, operand2) = get_Gv_Ev_operands(instruction_ptr, read_offset, decoded_prefixes);
@@ -428,7 +513,7 @@ function clause decode_one_byte_instruction(0x03, instruction_ptr, read_offset, 
     Some(new_read_offset, ADD(decoded_prefixes.lock, operand_size, operand1, operand2))
 }
 
-// Decode ADD r/m{16, 32, 64} imm{16, 32, 32} is located in the XOR section
+// Decode ADD r/m{8, 16, 32, 64} imm{8, 16, 32, 32} is located in the XOR section
 
 /* SUB */
 
@@ -467,7 +552,15 @@ function clause execute(SUB(lock, operand_size, dest, src)) = {
     update_parity_flag(result);
 }
 
-// Decode SUB r/m{32, 64}, r{32, 64}
+// Decode SUB r/m8, r8
+function clause decode_one_byte_instruction(0x28, instruction_ptr, read_offset, decoded_prefixes) = {
+    // get 2 operands of the addressing method + operand type: Operand 1 = Eb, Operand 2 = Gb
+    let (new_read_offset, operand1, operand2) = get_Eb_Gb_operands(instruction_ptr, read_offset, decoded_prefixes.REX);
+    // return new read offset and decoded instruction
+    Some(new_read_offset, SUB(decoded_prefixes.lock, 8, operand1, operand2))
+}
+
+// Decode SUB r/m{16, 32, 64}, r{16, 32, 64}
 function clause decode_one_byte_instruction(0x29, instruction_ptr, read_offset, decoded_prefixes) = {
     // get 2 operands of the addressing method + operand type: Operand 1 = Ev, Operand 2 = Gv
     let (new_read_offset, operand_size, operand1, operand2) = get_Ev_Gv_operands(instruction_ptr, read_offset, decoded_prefixes);
@@ -475,7 +568,15 @@ function clause decode_one_byte_instruction(0x29, instruction_ptr, read_offset, 
     Some(new_read_offset, SUB(decoded_prefixes.lock, operand_size, operand1, operand2))
 }
 
-// Decode SUB r{32, 64}, r/m{32, 64}
+// Decode SUB r8, r/m8
+function clause decode_one_byte_instruction(0x2A, instruction_ptr, read_offset, decoded_prefixes) = {
+    // get 2 operands of the addressing method + operand type: Operand 1 = Gb, Operand 2 = Eb
+    let (new_read_offset, operand1, operand2) = get_Gb_Eb_operands(instruction_ptr, read_offset, decoded_prefixes.REX);
+    // return new read offset and decoded instruction
+    Some(new_read_offset, SUB(decoded_prefixes.lock, 8, operand1, operand2))
+}
+
+// Decode SUB r{16, 32, 64}, r/m{16, 32, 64}
 function clause decode_one_byte_instruction(0x2B, instruction_ptr, read_offset, decoded_prefixes) = {
     // get 2 operands of the addressing method + operand type: Operand 1 = Gv, Operand 2 = Ev
     let (new_read_offset, operand_size, operand1, operand2) = get_Gv_Ev_operands(instruction_ptr, read_offset, decoded_prefixes);
@@ -483,7 +584,7 @@ function clause decode_one_byte_instruction(0x2B, instruction_ptr, read_offset, 
     Some(new_read_offset, SUB(decoded_prefixes.lock, operand_size, operand1, operand2))
 }
 
-// Decode SUB r/m{16, 32, 64} imm{16, 32, 32} is located in the XOR section
+// Decode SUB r/m{8, 16, 32, 64} imm{8, 16, 32, 32} is located in the XOR section
 
 /* IMUL */
 

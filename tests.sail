@@ -313,6 +313,46 @@ function test_decode_xor_rm64_imm32() -> unit = {
 }
 
 /*===========================================================
+Decode FENCE tests
+============================================================*/
+
+function test_decode_sfence() -> unit = {
+  foreach (i from 0 to 7) {
+    let old_rip = RIP;
+    let instruction: bits(24) = 0x0F @ 0xAE @ 0b11_111 @ get_slice_int(3, i, 0);
+    write_instruction_to_memory(instruction, RIP);
+    let (new_rip, decoded_instruction) = unwrap_decoded_instr(decode(RIP));
+    RIP = new_rip;
+    assert(unsigned(new_rip) - unsigned(old_rip) == 3, "SFENCE: Wrong instruction length has been read");
+    assert(decoded_instruction == SFENCE(), "SFENCE instruction not decoded properly");
+  }
+}
+
+function test_decode_lfence() -> unit = {
+  foreach (i from 0 to 7) {
+    let old_rip = RIP;
+    let instruction: bits(24) = 0x0F @ 0xAE @ 0b11_101 @ get_slice_int(3, i, 0);
+    write_instruction_to_memory(instruction, RIP);
+    let (new_rip, decoded_instruction) = unwrap_decoded_instr(decode(RIP));
+    RIP = new_rip;
+    assert(unsigned(new_rip) - unsigned(old_rip) == 3, "LFENCE: Wrong instruction length has been read");
+    assert(decoded_instruction == LFENCE(), "LFENCE instruction not decoded properly");
+  }
+}
+
+function test_decode_mfence() -> unit = {
+  foreach (i from 0 to 7) {
+    let old_rip = RIP;
+    let instruction: bits(24) = 0x0F @ 0xAE @ 0b11_110 @ get_slice_int(3, i, 0);
+    write_instruction_to_memory(instruction, RIP);
+    let (new_rip, decoded_instruction) = unwrap_decoded_instr(decode(RIP));
+    RIP = new_rip;
+    assert(unsigned(new_rip) - unsigned(old_rip) == 3, "MFENCE: Wrong instruction length has been read");
+    assert(decoded_instruction == MFENCE(), "MFENCE instruction not decoded properly");
+  }
+}
+
+/*===========================================================
 Decode PUSH tests
 ============================================================*/
 
@@ -403,6 +443,10 @@ function test_decode() -> unit = {
   test_decode_xor_r64_rm64();
   test_decode_xor_rm8_imm8();
   test_decode_xor_rm64_imm32();
+  
+  test_decode_sfence();
+  test_decode_lfence();
+  test_decode_mfence();
 
   test_decode_push_imm16();
   test_decode_push_m64();

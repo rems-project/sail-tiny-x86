@@ -228,13 +228,13 @@ function clause decode_two_byte_instruction(0x0FAE, instruction_ptr, read_offset
             0b101 => {
                 // LFENCE
                 // Use of 66 / F2 / F3 prefixes are not allowed in the instruction. Only prefix 66 has been implemented in this model.
-                if decoded_prefixes.op_size_override then fail("Prefix 66H is not allowed in the SFENCE instruction");
+                if decoded_prefixes.op_size_override then fail("Prefix 66H is not allowed in the LFENCE instruction");
                 Some(new_read_offset, LFENCE())
             },
             0b110 => {
                 // MFENCE
                 // Use of 66 / F2 / F3 prefixes are not allowed in the instruction. Only prefix 66 has been implemented in this model.
-                if decoded_prefixes.op_size_override then fail("Prefix 66H is not allowed in the SFENCE instruction");
+                if decoded_prefixes.op_size_override then fail("Prefix 66H is not allowed in the MFENCE instruction");
                 Some(new_read_offset, MFENCE())
             },
             _ => {
@@ -705,7 +705,7 @@ function clause execute(JMP(rel8)) = {
 }
 
 // Decode JMP rel8
-function clause decode_one_byte_instruction(0xE8, instruction_ptr, read_offset, decoded_prefixes) = {
+function clause decode_one_byte_instruction(0xEB, instruction_ptr, read_offset, decoded_prefixes) = {
     // read 8-bit immediate
     let operand = read_memory(1, instruction_ptr + read_offset, create_iFetchAccessDescriptor());
     // increment read offset

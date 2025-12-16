@@ -298,6 +298,20 @@ function test_decode_xor_rm8_imm8() -> unit = {
   assert(decoded_instruction == XOR(false, 8, rm_MEM(expected_mem_addr), rmi_IMM(IMM8(0xFF))), "XOR(rm8, imm8) instruction not decoded properly");
 }
 
+function test_decode_xor_rm64_imm32() -> unit = {
+  // Testing that XOR m(RAX * 2 + RCX), 0xABCD_1234 is decoded correctly
+  let old_rip = RIP;
+  let instruction: bits(72) = 0xF0 @ 0b0100_1000 @ 0x81 @ 0b00_110_100 @ 0b01_000_001 @ reverse_endianness(0xABCD_1234);
+  write_instruction_to_memory(instruction, RIP);
+  RAX = 0xFEDC_BA98_7654_3210;
+  RCX = 0xF0F0_F0F0_EEEE_CCCC;
+  let (new_rip, decoded_instruction) = unwrap_decoded_instr(decode(RIP));
+  RIP = new_rip;
+  let expected_mem_addr = add_bits(add_bits(RAX, RAX), RCX);
+  assert(unsigned(new_rip) - unsigned(old_rip) == 9, "XOR(rm64, imm32): Wrong instruction length has been read");
+  assert(decoded_instruction == XOR(true, 64, rm_MEM(expected_mem_addr), rmi_IMM(IMM32(0xABCD_1234))), "XOR(rm64, imm32) instruction not decoded properly");
+}
+
 /*===========================================================
 Decode PUSH tests
 ============================================================*/
@@ -388,6 +402,7 @@ function test_decode() -> unit = {
   test_decode_xor_r8_rm8();
   test_decode_xor_r64_rm64();
   test_decode_xor_rm8_imm8();
+  test_decode_xor_rm64_imm32();
 
   test_decode_push_imm16();
   test_decode_push_m64();

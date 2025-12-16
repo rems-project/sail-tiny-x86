@@ -171,7 +171,7 @@ function clause decode_one_byte_instruction(0x33, instruction_ptr, read_offset, 
 }
 
 // Decode XOR, ADD, SUB, CMP r/m{8, 16, 32, 64} imm{8, 16, 32, 32}
-/* WARNING: Opcodes 80 (r/m8 r8) and 81 (all others) encode a group of instructions. 
+/* WARNING: Opcodes 80 (r/m8 imm8) and 81 (all others) encode a group of instructions. 
 The exact instruction encoded is specified in the reg field of the mod r/m byte.
 Out of all instructions with opcodes 80 and 81, we currently only support the ADD, SUB, XOR and CMP instructions. */
 function clause decode_one_byte_instruction(0b1000_000 @ not_8_bit, instruction_ptr, read_offset, decoded_prefixes) = {
@@ -185,7 +185,7 @@ function clause decode_one_byte_instruction(0b1000_000 @ not_8_bit, instruction_
             get_Ev_Iz_operands(instruction_ptr, read_offset, decoded_prefixes, mod_rm_byte)
         else {
             // Get 2 operands of the addressing method + operand type: Operand 1 = Eb, Operand 2 = Ib
-            let (new_read_offset, operand1, imm) = get_Eb_Ib_operands(instruction_ptr, read_offset, decoded_prefixes.REX, mod_rm_byte);
+            let (new_read_offset, operand1, imm) = get_Eb_Ib_operands(instruction_ptr, read_offset_2, decoded_prefixes.REX, mod_rm_byte);
             (new_read_offset, 8, operand1, imm)
         }
     };

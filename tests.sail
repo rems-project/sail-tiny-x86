@@ -153,6 +153,15 @@ function unwrap_decoded_instr(res) = {
   }
 }
 
+function decode_mov_rm8_r8() -> unit = {
+  // Testing that MOV AH, AL is decoded correctly
+  let old_rip = RIP;
+  let instruction: bits(16) = 0x88 @ 0b11_000_100;
+  write_instruction_to_memory(instruction, RIP);
+  let (new_rip, decoded_instruction) = unwrap_decoded_instr(decode(RIP));
+  assert(decoded_instruction == MOV(8, rm_REG(REG_HIGH_BYTE(4)), rmi_REG(REG_NORMAL(0))), "MOV(8, rm8, r8) instruction not decoded properly");
+}
+
 function decode_mov_rm32_r32() -> unit = {
   // Testing that MOV RBP, RSP is decoded correctly
   let old_rip = RIP;
@@ -231,6 +240,7 @@ function decode_pop_r64() -> unit = {
 }
 
 function test_decode() -> unit = {
+  decode_mov_rm8_r8();
   decode_mov_rm32_r32();
   decode_mov_r64_rm64();
   decode_push_imm16();

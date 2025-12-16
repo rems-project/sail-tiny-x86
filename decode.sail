@@ -229,8 +229,8 @@ function read_imm_operand(instruction_ptr, read_offset, operand_size) = {
 
 val wrap_reg: (reg_index, operand_size, REX) -> reg
 function wrap_reg(reg_index, operand_size, REX) = {
-    if operand_size == 8 & REX.bits == 0x00 then
-        REG_HIGH_BYTE_ENABLED(reg_index)
+    if operand_size == 8 & REX.bits == 0x00 & reg_index >=4 & reg_index <= 7 then
+        REG_HIGH_BYTE(reg_index)
     else
         REG_NORMAL(reg_index)
 }

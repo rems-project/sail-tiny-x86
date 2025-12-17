@@ -229,8 +229,8 @@ function read_imm_operand(instruction_ptr, read_offset, operand_size) = {
 
 val wrap_reg: (reg_index, operand_size, REX) -> reg
 function wrap_reg(reg_index, operand_size, REX) = {
-    if operand_size == 8 & REX.bits == 0x00 then
-        REG_HIGH_BYTE_ENABLED(reg_index)
+    if operand_size == 8 & REX.bits == 0x00 & reg_index >=4 & reg_index <= 7 then
+        REG_HIGH_BYTE(reg_index)
     else
         REG_NORMAL(reg_index)
 }
@@ -374,23 +374,23 @@ function get_Ev_Iz_operands(instruction_ptr, read_offset, decoded_prefixes, mod_
     // Get operand size. Default is 32 bits.
     let operand_size = get_operand_size_using_REX(decoded_prefixes, 32);
     // Get r/m operand
-    let (read_offset_2, operand1) = decode_rm_operand_inner(addressingMethod_E, instruction_ptr, read_offset, mod_rm_byte, operand_size, decoded_prefixes.REX);
+    let (read_offset, operand1) = decode_rm_operand_inner(addressingMethod_E, instruction_ptr, read_offset, mod_rm_byte, operand_size, decoded_prefixes.REX);
     // Get imm operand
     let imm_size = if operand_size == 64 then 32 else operand_size;
-    let (read_offset_3, imm) = read_imm_operand(instruction_ptr, read_offset_2, imm_size);
+    let (read_offset, imm) = read_imm_operand(instruction_ptr, read_offset, imm_size);
     // return new read offset, operand size, and operands
-    (read_offset_3, operand_size, operand1, imm)
+    (read_offset, operand_size, operand1, imm)
 }
 
 // Get 2 operands of the addressing method + operand type: Operand 1 = Ev, Operand 2 = Iz
 val get_Eb_Ib_operands: (bits(64), int, REX, modRMByte) -> (int, rm_operand, imm)
 function get_Eb_Ib_operands(instruction_ptr, read_offset, REX, mod_rm_byte) = {
     // Get r/m operand
-    let (read_offset_2, operand1) = decode_rm_operand_inner(addressingMethod_E, instruction_ptr, read_offset, mod_rm_byte, 8, REX);
+    let (read_offset, operand1) = decode_rm_operand_inner(addressingMethod_E, instruction_ptr, read_offset, mod_rm_byte, 8, REX);
     // Get imm operand
-    let (read_offset_3, imm) = read_imm_operand(instruction_ptr, read_offset_2, 8);
+    let (read_offset, imm) = read_imm_operand(instruction_ptr, read_offset, 8);
     // return new read offset and operands
-    (read_offset_3, operand1, imm)
+    (read_offset, operand1, imm)
 }
 
 

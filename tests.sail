@@ -236,80 +236,194 @@ function test_decode_mov_r32_imm32() -> unit = {
 }
 
 /*===========================================================
-Decode XOR tests
+Decode XOR, CMP, ADD, SUB tests
 ============================================================*/
 
-function test_decode_xor_rm8_r8() -> unit = {
-  // Testing that XOR m(R15 + 0x3A), AL is decoded correctly
+enum group1instr = {
+  TEST_XOR,
+  TEST_CMP,
+  TEST_ADD,
+  TEST_SUB
+}
+
+function group1instr_to_string(instr: group1instr) -> string = {
+  match instr {
+    TEST_XOR => "XOR",
+    TEST_CMP => "CMP",
+    TEST_ADD => "ADD",
+    TEST_SUB => "SUB"
+  }
+}
+
+function test_decode_group1_rm8_r8(instr: group1instr) -> unit = {
+  // Testing that instr m(R15 + 0x3A), AL is decoded correctly
+
+  let opcode: bits(8) = match instr {
+    TEST_XOR => 0x30,
+    TEST_CMP => 0x38,
+    TEST_ADD => 0x00,
+    TEST_SUB => 0x28
+  };
+
   let old_rip = RIP;
-  let instruction: bits(32) = 0b0100_0001 @ 0x30 @ 0b01_000_111 @ 0x3A;
+  let instruction: bits(32) = 0b0100_0001 @ opcode @ 0b01_000_111 @ 0x3A;
   write_instruction_to_memory(instruction, RIP);
   let (new_rip, decoded_instruction) = unwrap_decoded_instr(decode(RIP));
   RIP = new_rip;
-  assert(unsigned(new_rip) - unsigned(old_rip) == 4, "XOR(rm8, r8): Wrong instruction length has been read");
+  assert(unsigned(new_rip) - unsigned(old_rip) == 4, concat_str(group1instr_to_string(instr),"(rm8, r8): Wrong instruction length has been read"));
+  
   let expected_mem_addr = add_bits(R15, sail_sign_extend(0x3A, 64));
-  assert(decoded_instruction == XOR(false, 8, rm_MEM(expected_mem_addr), rmi_REG(REG_NORMAL(0))), "XOR(rm8, r8) instruction not decoded properly");
+  let error_message = concat_str(group1instr_to_string(instr), "(rm8, r8) instruction not decoded properly");
+  match instr {
+    TEST_XOR => assert(decoded_instruction == XOR(false, 8, rm_MEM(expected_mem_addr), rmi_REG(REG_NORMAL(0))), error_message),
+    TEST_CMP => assert(decoded_instruction == CMP(8, rm_MEM(expected_mem_addr), rmi_REG(REG_NORMAL(0))), error_message),
+    TEST_ADD => assert(decoded_instruction == ADD(false, 8, rm_MEM(expected_mem_addr), rmi_REG(REG_NORMAL(0))), error_message),
+    TEST_SUB => assert(decoded_instruction == SUB(false, 8, rm_MEM(expected_mem_addr), rmi_REG(REG_NORMAL(0))), error_message)
+  }
 }
 
-function test_decode_xor_rm16_r16() -> unit = {
-  // Testing that XOR m(R15 + 0x3A), AX (with lock) is decoded correctly
+function test_decode_group1_rm16_r16(instr: group1instr) -> unit = {
+  // Testing that instr m(R15 + 0x3A), AX (with lock) is decoded correctly
+
+  let opcode: bits(8) = match instr {
+    TEST_XOR => 0x31,
+    TEST_CMP => 0x39,
+    TEST_ADD => 0x01,
+    TEST_SUB => 0x29
+  };
+
   let old_rip = RIP;
-  let instruction: bits(48) = 0xF0 @ 0x66 @ 0b0100_0001 @ 0x31 @ 0b01_000_111 @ 0x3A;
+
+  let first_prefix: bits(8) = if instr == TEST_CMP then 0x40 else 0xF0;
+  let instruction: bits(48) = first_prefix @ 0x66 @ 0b0100_0001 @ opcode @ 0b01_000_111 @ 0x3A;
+
   write_instruction_to_memory(instruction, RIP);
   let (new_rip, decoded_instruction) = unwrap_decoded_instr(decode(RIP));
   RIP = new_rip;
-  assert(unsigned(new_rip) - unsigned(old_rip) == 6, "XOR(rm16, r16): Wrong instruction length has been read");
+  assert(unsigned(new_rip) - unsigned(old_rip) == 6, concat_str(group1instr_to_string(instr), "(rm16, r16): Wrong instruction length has been read"));
+
   let expected_mem_addr = add_bits(R15, sail_sign_extend(0x3A, 64));
-  assert(decoded_instruction == XOR(true, 16, rm_MEM(expected_mem_addr), rmi_REG(REG_NORMAL(0))), "XOR(rm16, r16) instruction not decoded properly");
+  let error_message = concat_str(group1instr_to_string(instr), "(rm16, r16) instruction not decoded properly");
+  match instr {
+    TEST_XOR => assert(decoded_instruction == XOR(true, 16, rm_MEM(expected_mem_addr), rmi_REG(REG_NORMAL(0))), error_message),
+    TEST_CMP => assert(decoded_instruction == CMP(16, rm_MEM(expected_mem_addr), rmi_REG(REG_NORMAL(0))), error_message),
+    TEST_ADD => assert(decoded_instruction == ADD(true, 16, rm_MEM(expected_mem_addr), rmi_REG(REG_NORMAL(0))), error_message),
+    TEST_SUB => assert(decoded_instruction == SUB(true, 16, rm_MEM(expected_mem_addr), rmi_REG(REG_NORMAL(0))), error_message)
+  }
 }
 
-function test_decode_xor_r8_rm8() -> unit = {
-  // Testing that XOR AL, m(R15 + 0x3A) (with lock) is decoded correctly
+function test_decode_group1_r8_rm8(instr: group1instr) -> unit = {
+  // Testing that instr AL, m(R15 + 0x3A) (with lock) is decoded correctly
+
+  let opcode: bits(8) = match instr {
+    TEST_XOR => 0x32,
+    TEST_CMP => 0x3A,
+    TEST_ADD => 0x02,
+    TEST_SUB => 0x2A
+  };
+
   let old_rip = RIP;
-  let instruction: bits(40) = 0xF0 @ 0b0100_0001 @ 0x32 @ 0b01_000_111 @ 0x3A;
+
+  let first_prefix: bits(8) = if instr == TEST_CMP then 0x40 else 0xF0;
+  let instruction: bits(40) = first_prefix @ 0b0100_0001 @ opcode @ 0b01_000_111 @ 0x3A;
+
   write_instruction_to_memory(instruction, RIP);
   let (new_rip, decoded_instruction) = unwrap_decoded_instr(decode(RIP));
   RIP = new_rip;
-  assert(unsigned(new_rip) - unsigned(old_rip) == 5, "XOR(r8, rm8): Wrong instruction length has been read");
+  assert(unsigned(new_rip) - unsigned(old_rip) == 5, concat_str(group1instr_to_string(instr),"(r8, rm8): Wrong instruction length has been read"));
+  
   let expected_mem_addr = add_bits(R15, sail_sign_extend(0x3A, 64));
-  assert(decoded_instruction == XOR(true, 8, rm_REG(REG_NORMAL(0)), rmi_MEM(expected_mem_addr)), "XOR(r8, rm8) instruction not decoded properly");
+  let error_message = concat_str(group1instr_to_string(instr), "(r8, rm8) instruction not decoded properly");
+  match instr {
+    TEST_XOR => assert(decoded_instruction == XOR(true, 8, rm_REG(REG_NORMAL(0)), rmi_MEM(expected_mem_addr)), error_message),
+    TEST_CMP => assert(decoded_instruction == CMP(8, rm_REG(REG_NORMAL(0)), rmi_MEM(expected_mem_addr)), error_message),
+    TEST_ADD => assert(decoded_instruction == ADD(true, 8, rm_REG(REG_NORMAL(0)), rmi_MEM(expected_mem_addr)), error_message),
+    TEST_SUB => assert(decoded_instruction == SUB(true, 8, rm_REG(REG_NORMAL(0)), rmi_MEM(expected_mem_addr)), error_message)
+  }
 }
 
-function test_decode_xor_r64_rm64() -> unit = {
-  // Testing that XOR RAX, RDI is decoded correctly
+function test_decode_group1_r64_rm64(instr: group1instr) -> unit = {
+  // Testing that instr RAX, RDI is decoded correctly
+
+  let opcode: bits(8) = match instr {
+    TEST_XOR => 0x33,
+    TEST_CMP => 0x3B,
+    TEST_ADD => 0x03,
+    TEST_SUB => 0x2B
+  };
+
   let old_rip = RIP;
-  let instruction: bits(24) = 0b0100_1000 @ 0x33 @ 0b11_000_111;
+  let instruction: bits(24) = 0b0100_1000 @ opcode @ 0b11_000_111;
   write_instruction_to_memory(instruction, RIP);
   let (new_rip, decoded_instruction) = unwrap_decoded_instr(decode(RIP));
   RIP = new_rip;
-  assert(unsigned(new_rip) - unsigned(old_rip) == 3, "XOR(r64, rm64): Wrong instruction length has been read");
-  assert(decoded_instruction == XOR(false, 64, rm_REG(REG_NORMAL(0)), rmi_REG(REG_NORMAL(7))), "XOR(r64, rm64) instruction not decoded properly");
+  assert(unsigned(new_rip) - unsigned(old_rip) == 3, concat_str(group1instr_to_string(instr), "(r64, rm64): Wrong instruction length has been read"));
+  
+  let error_message = concat_str(group1instr_to_string(instr), "(r64, rm64) instruction not decoded properly");
+  match instr {
+    TEST_XOR => assert(decoded_instruction == XOR(false, 64, rm_REG(REG_NORMAL(0)), rmi_REG(REG_NORMAL(7))), error_message),
+    TEST_CMP => assert(decoded_instruction == CMP(64, rm_REG(REG_NORMAL(0)), rmi_REG(REG_NORMAL(7))), error_message),
+    TEST_ADD => assert(decoded_instruction == ADD(false, 64, rm_REG(REG_NORMAL(0)), rmi_REG(REG_NORMAL(7))), error_message),
+    TEST_SUB => assert(decoded_instruction == SUB(false, 64, rm_REG(REG_NORMAL(0)), rmi_REG(REG_NORMAL(7))), error_message)
+  }
 }
 
-function test_decode_xor_rm8_imm8() -> unit = {
-  // Testing that XOR m(R15 + 0x3A), 0xFF is decoded correctly
+function test_decode_group1_rm8_imm8(instr: group1instr) -> unit = {
+  // Testing that instr m(R15 + 0x3A), 0xFF is decoded correctly
+
+  let reg_field: bits(3) = match instr {
+    TEST_XOR => 0b110,
+    TEST_CMP => 0b111,
+    TEST_ADD => 0b000,
+    TEST_SUB => 0b101
+  };
+
   let old_rip = RIP;
-  let instruction: bits(40) = 0b0100_0001 @ 0x80 @ 0b01_110_111 @ 0x3A @ 0xFF;
+  let instruction: bits(40) = 0b0100_0001 @ 0x80 @ 0b01 @ reg_field @ 0b111 @ 0x3A @ 0xFF;
   write_instruction_to_memory(instruction, RIP);
   let (new_rip, decoded_instruction) = unwrap_decoded_instr(decode(RIP));
   RIP = new_rip;
   let expected_mem_addr = add_bits(R15, sail_sign_extend(0x3A, 64));
-  assert(unsigned(new_rip) - unsigned(old_rip) == 5, "XOR(rm8, imm8): Wrong instruction length has been read");
-  assert(decoded_instruction == XOR(false, 8, rm_MEM(expected_mem_addr), rmi_IMM(IMM8(0xFF))), "XOR(rm8, imm8) instruction not decoded properly");
+  assert(unsigned(new_rip) - unsigned(old_rip) == 5, concat_str(group1instr_to_string(instr), "(rm8, imm8): Wrong instruction length has been read"));
+
+  let error_message = concat_str(group1instr_to_string(instr), "(rm8, imm8) instruction not decoded properly");
+  match instr {
+    TEST_XOR => assert(decoded_instruction == XOR(false, 8, rm_MEM(expected_mem_addr), rmi_IMM(IMM8(0xFF))), error_message),
+    TEST_CMP => assert(decoded_instruction == CMP(8, rm_MEM(expected_mem_addr), rmi_IMM(IMM8(0xFF))), error_message),
+    TEST_ADD => assert(decoded_instruction == ADD(false, 8, rm_MEM(expected_mem_addr), rmi_IMM(IMM8(0xFF))), error_message),
+    TEST_SUB => assert(decoded_instruction == SUB(false, 8, rm_MEM(expected_mem_addr), rmi_IMM(IMM8(0xFF))), error_message)
+  }
 }
 
-function test_decode_xor_rm64_imm32() -> unit = {
-  // Testing that XOR m(RAX * 2 + RCX), 0xABCD_1234 is decoded correctly
+function test_decode_group1_rm64_imm32(instr: group1instr) -> unit = {
+  // Testing that instr m(RAX * 2 + RCX), 0xABCD_1234 (with lock) is decoded correctly
+
+  let reg_field: bits(3) = match instr {
+    TEST_XOR => 0b110,
+    TEST_CMP => 0b111,
+    TEST_ADD => 0b000,
+    TEST_SUB => 0b101
+  };
+
   let old_rip = RIP;
-  let instruction: bits(72) = 0xF0 @ 0b0100_1000 @ 0x81 @ 0b00_110_100 @ 0b01_000_001 @ reverse_endianness(0xABCD_1234);
+
+  let first_prefix = if instr == TEST_CMP then 0x40 else 0xF0;
+  let instruction: bits(72) = first_prefix @ 0b0100_1000 @ 0x81 @ 0b00 @ reg_field @ 0b100 @ 0b01_000_001 @ reverse_endianness(0xABCD_1234);
   write_instruction_to_memory(instruction, RIP);
   RAX = 0xFEDC_BA98_7654_3210;
   RCX = 0xF0F0_F0F0_EEEE_CCCC;
   let (new_rip, decoded_instruction) = unwrap_decoded_instr(decode(RIP));
   RIP = new_rip;
   let expected_mem_addr = add_bits(add_bits(RAX, RAX), RCX);
-  assert(unsigned(new_rip) - unsigned(old_rip) == 9, "XOR(rm64, imm32): Wrong instruction length has been read");
-  assert(decoded_instruction == XOR(true, 64, rm_MEM(expected_mem_addr), rmi_IMM(IMM32(0xABCD_1234))), "XOR(rm64, imm32) instruction not decoded properly");
+  assert(unsigned(new_rip) - unsigned(old_rip) == 9, concat_str(group1instr_to_string(instr), "(rm64, imm32): Wrong instruction length has been read"));
+
+  let error_message = concat_str(group1instr_to_string(instr), "(rm64, imm32) instruction not decoded properly");
+  match instr {
+    TEST_XOR => assert(decoded_instruction == XOR(true, 64, rm_MEM(expected_mem_addr), rmi_IMM(IMM32(0xABCD_1234))), error_message),
+    TEST_CMP => assert(decoded_instruction == CMP(64, rm_MEM(expected_mem_addr), rmi_IMM(IMM32(0xABCD_1234))), error_message),
+    TEST_ADD => assert(decoded_instruction == ADD(true, 64, rm_MEM(expected_mem_addr), rmi_IMM(IMM32(0xABCD_1234))), error_message),
+    TEST_SUB => assert(decoded_instruction == SUB(true, 64, rm_MEM(expected_mem_addr), rmi_IMM(IMM32(0xABCD_1234))), error_message)
+  }
 }
 
 /*===========================================================
@@ -437,22 +551,44 @@ function test_decode() -> unit = {
   test_decode_mov_r8_imm8();
   test_decode_mov_r32_imm32();
 
-  test_decode_xor_rm8_r8();
-  test_decode_xor_rm16_r16();
-  test_decode_xor_r8_rm8();
-  test_decode_xor_r64_rm64();
-  test_decode_xor_rm8_imm8();
-  test_decode_xor_rm64_imm32();
+  test_decode_group1_rm8_r8(TEST_XOR);
+  test_decode_group1_rm16_r16(TEST_XOR);
+  test_decode_group1_r8_rm8(TEST_XOR);
+  test_decode_group1_r64_rm64(TEST_XOR);
+  test_decode_group1_rm8_imm8(TEST_XOR);
+  test_decode_group1_rm64_imm32(TEST_XOR);
   
   test_decode_sfence();
   test_decode_lfence();
   test_decode_mfence();
 
+  test_decode_group1_rm8_r8(TEST_CMP);
+  test_decode_group1_rm16_r16(TEST_CMP);
+  test_decode_group1_r8_rm8(TEST_CMP);
+  test_decode_group1_r64_rm64(TEST_CMP);
+  test_decode_group1_rm8_imm8(TEST_CMP);
+  test_decode_group1_rm64_imm32(TEST_CMP);
+
   test_decode_push_imm16();
   test_decode_push_m64();
   test_decode_push_r16();
+
   test_decode_pop_r16();
   test_decode_pop_r64();
+
+  test_decode_group1_rm8_r8(TEST_ADD);
+  test_decode_group1_rm16_r16(TEST_ADD);
+  test_decode_group1_r8_rm8(TEST_ADD);
+  test_decode_group1_r64_rm64(TEST_ADD);
+  test_decode_group1_rm8_imm8(TEST_ADD);
+  test_decode_group1_rm64_imm32(TEST_ADD);
+
+  test_decode_group1_rm8_r8(TEST_SUB);
+  test_decode_group1_rm16_r16(TEST_SUB);
+  test_decode_group1_r8_rm8(TEST_SUB);
+  test_decode_group1_r64_rm64(TEST_SUB);
+  test_decode_group1_rm8_imm8(TEST_SUB);
+  test_decode_group1_rm64_imm32(TEST_SUB);
 }
 
 function main() : unit -> unit = {

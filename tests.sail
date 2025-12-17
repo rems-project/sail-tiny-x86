@@ -472,19 +472,24 @@ Decode PUSH tests
 
 function test_decode_push_imm16() -> unit = {
   // Testing that PUSH IMM16(0x4567) is decoded correctly
+
   // Write prefix and opcode to memory
   let instruction: bits(32) = 0x66 @ 0x68 @ reverse_endianness(0x4567);
   write_instruction_to_memory(instruction, RIP);
   let old_rip = RIP;
-  // Decode and test
+
+  // Decode
   let (new_rip, decoded_instruction) = unwrap_decoded_instr(decode(RIP));
   RIP = new_rip;
+
+  // Test
   assert(unsigned(new_rip) - unsigned(old_rip) == 4, "PUSH(imm16): Wrong instruction length has been read");
   assert(decoded_instruction == PUSH(16, rmi_IMM(IMM16(0x4567))), "PUSH(imm16) instruction not decoded properly");
 }
 
 function test_decode_push_m64() -> unit = {
   // Testing that PUSH MEM64([RDI] + 0xFF (sign-extended)) is decoded correctly
+
   // Write to RDI
   write_GPR(64, REG_NORMAL(7), 0x1234_5678_9ABC_DEF0);
   // Write instruction to memory. Instruction consists of opcode, mod r/m byte, then 8-bit displacement
@@ -493,22 +498,29 @@ function test_decode_push_m64() -> unit = {
   let old_rip = RIP;
   // Calculate expected memory address ([RDI] + 0xFF (sign-extended))
   let expected_mem_address = add_bits(read_GPR(64, REG_NORMAL(7)), sail_sign_extend(0xFF, 64));
-  // Decode and test
+
+  // Decode
   let (new_rip, decoded_instruction) = unwrap_decoded_instr(decode(RIP));
   RIP = new_rip;
+
+  // Test
   assert(unsigned(new_rip) - unsigned(old_rip) == 3, "PUSH(m64): Wrong instruction length has been read");
   assert(decoded_instruction == PUSH(64, rmi_MEM(expected_mem_address)), "PUSH(m64) instruction not decoded properly");
 }
 
 function test_decode_push_r16() -> unit = {
   // Testing that PUSH REG16(R8) is decoded correctly
+
   // Write instruction to memory. Instruction consists of operand size override prefix, rex prefix, and opcode with embedded register location
   let instruction: bits(24) = 0x66 @ 0b0100_0001 @ 0x5 @ 0b0 @ 0b000;
   write_instruction_to_memory(instruction, RIP);
   let old_rip = RIP;
-  // Decode and test
+
+  // Decode
   let (new_rip, decoded_instruction) = unwrap_decoded_instr(decode(RIP));
   RIP = new_rip;
+
+  // Test
   assert(unsigned(new_rip) - unsigned(old_rip) == 3, "PUSH(r16): Wrong instruction length has been read");
   assert(decoded_instruction == PUSH(16, rmi_REG(REG_NORMAL(8))), "PUSH(r16) instruction not decoded properly")
 }
@@ -519,28 +531,190 @@ Decode POP tests
 
 function test_decode_pop_r16() -> unit = {
   // Testing that POP REG16(RSI) is decoded correctly
+
   // Write instruction to memory. Instruction consists of operand size override prefix, opcode, and mod r/m byte
   let instruction: bits(24) = 0x66 @ 0x8F @ 0b11_000_110;
   write_instruction_to_memory(instruction, RIP);
   let old_rip = RIP;
-  // Decode and test
+
+  // Decode
   let (new_rip, decoded_instruction) = unwrap_decoded_instr(decode(RIP));
   RIP = new_rip;
+
+  // TEST
   assert(unsigned(new_rip) - unsigned(old_rip) == 3, "POP(r16): Wrong instruction length has been read");
   assert(decoded_instruction == POP(16, rm_REG(REG_NORMAL(6))), "POP(r16) not decoded properly")
 }
 
 function test_decode_pop_r64() -> unit = {
   // Testing that POP REG64(RAX) is decoded correctly
+
   // Write instruction to memory. Instruction consists of empty REX prefix, and opcode with embedded register location
   let instruction: bits(16) = 0b0100_0000 @ 0x5 @ 0b1 @ 0b000;
   write_instruction_to_memory(instruction, RIP);
   let old_rip = RIP;
-  // Decode and test
+
+  // Decode
   let (new_rip, decoded_instruction) = unwrap_decoded_instr(decode(RIP));
   RIP = new_rip;
+
+  // Test
   assert(unsigned(new_rip) - unsigned(old_rip) == 2, "POP(r64): Wrong instruction length has been read");
   assert(decoded_instruction == POP(64, rm_REG(REG_NORMAL(0))), "POP(r64) not decoded properly")
+}
+
+/*===========================================================
+Decode IMUL tests
+============================================================*/
+
+function test_decode_imul_r16_rm16() -> unit = {
+  // Testing that IMUL AX, AX is decoded correctly
+
+  // Write instruction to memory
+  let instruction: bits(32) = 0x66 @ 0x0F @ 0xAF @ 0b11_000_000;
+  write_instruction_to_memory(instruction, RIP);
+  let old_rip = RIP;
+
+  // Decode
+  let (new_rip, decoded_instruction) = unwrap_decoded_instr(decode(RIP));
+  RIP = new_rip;
+
+  // Test
+  assert(unsigned(new_rip) - unsigned(old_rip) == 4, "IMUL(r16, rm16): Wrong instruction length has been read");
+  assert(decoded_instruction == IMUL(16, 0, rm_REG(REG_NORMAL(0))), "IMUL(r16, rm16) not decoded properly")
+}
+
+function test_decode_imul_r64_rm64() -> unit = {
+  // Testing that IMUL R8, RAX is decoded correctly
+
+  // Write instruction to memory
+  let instruction: bits(32) = 0b0100_1100 @ 0x0F @ 0xAF @ 0b11_000_000;
+  write_instruction_to_memory(instruction, RIP);
+  let old_rip = RIP;
+
+  // Decode
+  let (new_rip, decoded_instruction) = unwrap_decoded_instr(decode(RIP));
+  RIP = new_rip;
+
+  // Test
+  assert(unsigned(new_rip) - unsigned(old_rip) == 4, "IMUL(r64, rm64): Wrong instruction length has been read");
+  assert(decoded_instruction == IMUL(64, 8, rm_REG(REG_NORMAL(0))), "IMUL(r64, rm64) not decoded properly")
+}
+
+/*===========================================================
+Decode CALL test
+============================================================*/
+
+function test_decode_call_rel32() -> unit = {
+  // Testing that CALL 0xFEFE_1010 is decoded correctly
+
+  // Write instruction to memory
+  let instruction: bits(40) = 0xE8 @ reverse_endianness(0xFEFE_1010);
+  write_instruction_to_memory(instruction, RIP);
+  let old_rip = RIP;
+
+  // Decode
+  let (new_rip, decoded_instruction) = unwrap_decoded_instr(decode(RIP));
+  RIP = new_rip;
+
+  // Test
+  assert(unsigned(new_rip) - unsigned(old_rip) == 5, "CALL(rel32): Wrong instruction length has been read");
+  assert(decoded_instruction == CALL(0xFEFE_1010), "CALL(rel32) not decoded properly")
+}
+
+/*===========================================================
+Decode LEAVE tests
+============================================================*/
+
+function test_decode_leave16() -> unit = {
+  // Testing that LEAVE (operand size 16 - even if there is a REX prefix) is decoded correctly
+
+  // Write instruction to memory
+  let instruction: bits(24) = 0x66 @ 0x40 @ 0xC9;
+  write_instruction_to_memory(instruction, RIP);
+  let old_rip = RIP;
+
+  // Decode
+  let (new_rip, decoded_instruction) = unwrap_decoded_instr(decode(RIP));
+  RIP = new_rip;
+
+  // Test
+  assert(unsigned(new_rip) - unsigned(old_rip) == 3, "LEAVE16: Wrong instruction length has been read");
+  assert(decoded_instruction == LEAVE(16), "LEAVE16 not decoded properly")
+}
+
+function test_decode_leave64() -> unit = {
+  // Testing that LEAVE (operand size 64 - default operand size) is decoded correctly
+
+  // Write instruction to memory
+  let instruction: bits(8) = 0xC9;
+  write_instruction_to_memory(instruction, RIP);
+  let old_rip = RIP;
+
+  // Decode
+  let (new_rip, decoded_instruction) = unwrap_decoded_instr(decode(RIP));
+  RIP = new_rip;
+
+  // Test
+  assert(unsigned(new_rip) - unsigned(old_rip) == 1, "LEAVE64: Wrong instruction length has been read");
+  assert(decoded_instruction == LEAVE(64), "LEAVE64 not decoded properly")
+}
+
+/*===========================================================
+Decode RET test
+============================================================*/
+
+function test_decode_ret() -> unit = {
+  // Write instruction to memory
+  let instruction: bits(8) = 0xC3;
+  write_instruction_to_memory(instruction, RIP);
+  let old_rip = RIP;
+
+  // Decode
+  let (new_rip, decoded_instruction) = unwrap_decoded_instr(decode(RIP));
+  RIP = new_rip;
+
+  // Test
+  assert(unsigned(new_rip) - unsigned(old_rip) == 1, "RET: Wrong instruction length has been read");
+  assert(decoded_instruction == RET(), "RET not decoded properly")
+}
+
+/*===========================================================
+Decode JMP test
+============================================================*/
+
+function test_decode_jmp_rel8() -> unit = {
+  // Write instruction to memory
+  let instruction: bits(16) = 0xEB @ 0xF0;
+  write_instruction_to_memory(instruction, RIP);
+  let old_rip = RIP;
+
+  // Decode
+  let (new_rip, decoded_instruction) = unwrap_decoded_instr(decode(RIP));
+  RIP = new_rip;
+
+  // Test
+  assert(unsigned(new_rip) - unsigned(old_rip) == 2, "JMP(rel8): Wrong instruction length has been read");
+  assert(decoded_instruction == JMP(0xF0), "JMP(rel8) not decoded properly")
+}
+
+/*===========================================================
+Decode JNS test
+============================================================*/
+
+function test_decode_jns_rel8() -> unit = {
+  // Write instruction to memory
+  let instruction: bits(16) = 0x79 @ 0x7A;
+  write_instruction_to_memory(instruction, RIP);
+  let old_rip = RIP;
+
+  // Decode
+  let (new_rip, decoded_instruction) = unwrap_decoded_instr(decode(RIP));
+  RIP = new_rip;
+
+  // Test
+  assert(unsigned(new_rip) - unsigned(old_rip) == 2, "JNS(rel8): Wrong instruction length has been read");
+  assert(decoded_instruction == JNS(0x7A), "JNS(rel8) not decoded properly")
 }
 
 function test_decode() -> unit = {
@@ -589,6 +763,20 @@ function test_decode() -> unit = {
   test_decode_group1_r64_rm64(TEST_SUB);
   test_decode_group1_rm8_imm8(TEST_SUB);
   test_decode_group1_rm64_imm32(TEST_SUB);
+
+  test_decode_imul_r16_rm16();
+  test_decode_imul_r64_rm64();
+
+  test_decode_call_rel32();
+
+  test_decode_leave16();
+  test_decode_leave64();
+
+  test_decode_ret();
+
+  test_decode_jmp_rel8();
+
+  test_decode_jns_rel8();
 }
 
 function main() : unit -> unit = {

@@ -705,7 +705,7 @@ function clause execute(JMP(rel8)) = {
 }
 
 // Decode JMP rel8
-function clause decode_one_byte_instruction(0xE8, instruction_ptr, read_offset, decoded_prefixes) = {
+function clause decode_one_byte_instruction(0xEB, instruction_ptr, read_offset, decoded_prefixes) = {
     // read 8-bit immediate
     let operand = read_memory(1, instruction_ptr + read_offset, create_iFetchAccessDescriptor());
     // increment read offset

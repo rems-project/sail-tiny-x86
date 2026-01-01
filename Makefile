@@ -1,5 +1,5 @@
 SAIL_DIR=`sail --dir`
-X86_FILES=prelude.sail registers.sail interface.sail operands.sail tiny-x86.sail tests.sail
+X86_FILES=prelude.sail registers.sail interface.sail operands.sail decode.sail tiny-x86.sail tests.sail
 
 type-check:
 	sail $(X86_FILES)

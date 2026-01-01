@@ -116,7 +116,7 @@ function jmp() -> unit = {
   assert(RIP == add_bits(current_RIP, sail_sign_extend(0xFF, 64)), "JMP does not perform a correct jump");
 }
 
-function main() : unit -> unit = {
+function test_execute() -> unit = {
   write_then_read_mem();
   mov_reg_to_mem();
   xor_2_numbers();
@@ -127,4 +127,30 @@ function main() : unit -> unit = {
   multiply_2_numbers();
   call_leave_ret();
   jmp();
+}
+
+// reverse the order of each byte then write the resulting instruction to memory
+val write_instruction_to_memory : forall 'm, 'm > 0. (implicit('m), bits(8 * 'm), bits(64)) -> unit
+function write_instruction_to_memory(m, inst, instruction_ptr) = {
+  var res = sail_zeros(8 * m);
+  // reverse the order of each byte (e.g. first byte becomes the last byte)
+  foreach (i from 0 to (m - 1)) {
+    let j = m - i - 1;
+    res[(8 * i + 7) .. (8 * i)] = inst[(8 * j + 7) .. (8 * j)]
+  };
+  // store the resulting instruction in memory
+  write_memory(m, instruction_ptr, res, create_writeAccessDescriptor())
+}
+
+function test_decode() -> unit = {
+  // Testing that MOV RBP, RSP is decoded correctly
+  let old_rip = RIP;
+  write_instruction_to_memory(0x89E5, RIP); // we prob actually need to write instructions byte by byte
+  let (new_rip, decoded_instruction) = decode(RIP);
+  assert(decoded_instruction == MOV(32, rm_REG(5), rmi_REG(4)), "MOV(32, reg, reg) instruction not decoded properly");
+}
+
+function main() : unit -> unit = {
+  test_execute();
+  test_decode();
 }

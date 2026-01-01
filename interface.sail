@@ -12,14 +12,12 @@ enum AccessType = {
 struct AccessDescriptor = {
   acctype : AccessType,
   atomicop : bool,
-  standalone: bool,
   read : bool,
   write : bool,
 }
 function base_AccessDescriptor (acctype : AccessType) -> AccessDescriptor = struct {
   acctype = acctype,
   atomicop = false,
-  standalone = true,
   read = false,
   write = false,
 }
@@ -56,7 +54,7 @@ function mem_acc_is_rel_acq_rcpc (acc : AccessDescriptor) -> bool = false
 function mem_acc_is_rel_acq_rcsc (acc : AccessDescriptor) -> bool = false
 
 // access is from a standalone instruction (not part of an atomic sequence of instructionns)
-function mem_acc_is_standalone   (acc : AccessDescriptor) -> bool = acc.acctype == AccessType_RW & acc.standalone
+function mem_acc_is_standalone   (acc : AccessDescriptor) -> bool = acc.acctype == AccessType_RW & not_bool(acc.atomicop)
 
 // access is part of an exclusive instruction 
 function mem_acc_is_exclusive    (acc : AccessDescriptor) -> bool = false

@@ -39,13 +39,11 @@ function create_writeAccessDescriptor() -> AccessDescriptor = {
 function create_atomicReadAccessDescriptor() -> AccessDescriptor = {
   var accdesc = create_readAccessDescriptor();
   accdesc.atomicop = true;
-  accdesc.standalone = false;
   accdesc
 }
 function create_atomicWriteAccessDescriptor() -> AccessDescriptor = {
   var accdesc = create_writeAccessDescriptor();
   accdesc.atomicop = true;
-  accdesc.standalone = false;
   accdesc
 }
 

@@ -1,16 +1,16 @@
 union ast = {
-    // if one of the types is a tuple with first element word_size, the tuple represents (word_size, dest, src), unless the instruction is CMP
-    // only implementing instructions where both dest and src have the same word size, or where src can be sign-extended to the target word size
+    // Structure of all possible executable instructions
+    // if a type contains 2 operands, the first operand is dest and the second is src, unless the instruction is CMP
     MOV: (word_size, rm_operand, rmi_operand),
-    XOR: (word_size, rm_operand, rmi_operand),
+    XOR: (bool, word_size, rm_operand, rmi_operand),
     SFENCE: unit,
     LFENCE: unit,
     MFENCE: unit,
     CMP: (word_size, rm_operand, rmi_operand),
     PUSH: (word_size, rmi_operand), // only allowing 64 bit operand
     POP: (word_size, rm_operand),
-    ADD: (word_size, rm_operand, rmi_operand),
-    SUB: (word_size, rm_operand, rmi_operand),
+    ADD: (bool, word_size, rm_operand, rmi_operand),
+    SUB: (bool, word_size, rm_operand, rmi_operand),
     IMUL: (word_size, reg_index, rm_operand), // IMUL with only 2 arguments (dest and src)
     CALL: imm32,
     LEAVE: unit,
@@ -39,12 +39,13 @@ function clause execute(MOV(wsize, dest, src)) = {
         (rm_MEM(_), rmi_IMM(IMM64(_))) => fail("MOV operation cannot be executed on dest = mem64 and src = imm64"),
         (_,_) => ()
     };
+
     // execute MOV instruction
-    let val_to_write = read_operand(wsize, src);
-    write_operand(wsize, dest, val_to_write)
+    let val_to_write = read_operand(false, wsize, src);
+    write_operand(false, wsize, dest, val_to_write)
 }
 
-function clause execute(XOR(wsize, dest, src)) = {
+function clause execute(XOR(lock, wsize, dest, src)) = {
     // XOR cannot occur between dest = memory location and src = memory location
     fail_if_two_mem_operands(dest, src, "XOR");
     // For operation XOR, src = imm64 is not a valid operand 
@@ -52,11 +53,17 @@ function clause execute(XOR(wsize, dest, src)) = {
         rmi_IMM(IMM64(_)) => fail("For operation XOR, src = imm64 is not a valid operand"),
         _ => ()
     };
+    // XOR is not valid with lock = true if dest is a register location
+    match dest {
+        rm_REG(_) if lock => fail("undefined opcode exception (#UD): LOCK prefix cannot be applied to dest = reg"),
+        _ => ()
+    };
+
     // execute XOR instruction
-    let operand1 = read_operand(wsize, dest);
-    let operand2 = read_operand(wsize, src);
-    let result = xor_vec(operand1, operand2);
-    write_operand(wsize, dest, result);
+    let dest_val = read_operand(lock, wsize, dest);
+    let src_val = read_operand(false, wsize, src);
+    let result = xor_vec(dest_val, src_val);
+    write_operand(lock, wsize, dest, result);
 
     /* change value of status flags */
     // clear overflow and carry flag
@@ -98,8 +105,8 @@ function clause execute(CMP(wsize, first, second)) = {
     };
 
     // execute CMP instruction
-    let first_val = read_operand(wsize, first);
-    let second_val = read_operand(wsize, second);
+    let first_val = read_operand(false, wsize, first);
+    let second_val = read_operand(false, wsize, second);
     let result = sub_bits(first_val, second_val);
 
     /* change value of status flags. Equivalent to the changes made on executing the SUB instruction. */
@@ -120,20 +127,20 @@ function clause execute(CMP(wsize, first, second)) = {
 function clause execute(PUSH(wsize, src)) = {
     // PUSH instruction does not allow src = imm64, reg8 or mem8
     match src {
-        rmi_IMM(_) if wsize == 64 => fail("Operand for PUSH operation not supported"),
-        rmi_REG(_) if wsize == 8 => fail("Operand for PUSH operation not supported"),
-        rmi_MEM(_) if wsize == 8 => fail("Operand for PUSH operation not supported"),
+        rmi_IMM(_) if wsize == 64 => fail("Operand for PUSH operation not allowed"),
+        rmi_REG(_) if wsize == 8 => fail("Operand for PUSH operation not allowed"),
+        rmi_MEM(_) if wsize == 8 => fail("Operand for PUSH operation not allowed"),
         _ => ()
     };
 
     // If the source operand is an immediate of size less than the operand size, then sign-extend the value
     // default operand size is 8 bytes = 64 bits
-    let src_val = sail_sign_extend(read_operand(wsize, src), 64);
+    let src_val = sail_sign_extend(read_operand(false, wsize, src), 64);
     // subtract 8 from RSP to point to the new top of the stack
     RSP = sub_bits(RSP, sail_zero_extend(0x8, 64));
     // push the new item to the top of the stack
     let dest_address = rm_MEM(RSP);
-    write_operand(64, dest_address, src_val)
+    write_operand(false, 64, dest_address, src_val)
 }
 
 function clause execute(POP(wsize, dest)) = {
@@ -143,13 +150,13 @@ function clause execute(POP(wsize, dest)) = {
     if wsize == 16 then fail("dest size for POP operation not implemented in this model");
 
     // pop the value at the top of the stack to dest
-    let popped_val = read_operand(64, rm_MEM(RSP));
-    write_operand(64, dest, popped_val);
+    let popped_val = read_operand(false, 64, rm_MEM(RSP));
+    write_operand(false, 64, dest, popped_val);
     // increment stack pointer to free the popped stack space
     RSP = RSP + 8;
 }
 
-function clause execute(ADD(wsize, dest, src)) = {
+function clause execute(ADD(lock, wsize, dest, src)) = {
     // ADD cannot occur between dest = memory location and src = memory location
     fail_if_two_mem_operands(dest, src, "ADD");
     // For operation ADD, src = imm64 is not a valid operand 
@@ -157,12 +164,17 @@ function clause execute(ADD(wsize, dest, src)) = {
         rmi_IMM(IMM64(_)) => fail("For operation ADD, src = imm64 is not a valid operand"),
         _ => ()
     };
+    // ADD is not valid with prefix lock = true if dest is a register location
+    match dest {
+        rm_REG(_) if lock => fail("undefined opcode exception (#UD): LOCK prefix cannot be applied to dest = reg"),
+        _ => ()
+    };
 
     // execute ADD instruction
-    let dest_val = read_operand(wsize, dest);
-    let src_val = read_operand(wsize, src);
+    let dest_val = read_operand(lock, wsize, dest);
+    let src_val = read_operand(false, wsize, src);
     let result = add_bits(dest_val, src_val);
-    write_operand(wsize, dest, result);
+    write_operand(lock, wsize, dest, result);
 
     /* change value of status flags */
     // sign flag = msb of result (0 = +ve, 1 = -ve)
@@ -179,7 +191,7 @@ function clause execute(ADD(wsize, dest, src)) = {
     update_parity_flag(result);
 }
 
-function clause execute(SUB(wsize, dest, src)) = {
+function clause execute(SUB(lock, wsize, dest, src)) = {
     // SUB cannot occur between dest = memory location and src = memory location
     fail_if_two_mem_operands(dest, src, "SUB");
     // For operation SUB, src = imm64 is not a valid operand 
@@ -187,12 +199,17 @@ function clause execute(SUB(wsize, dest, src)) = {
         rmi_IMM(IMM64(_)) => fail("For operation SUB, src = imm64 is not a valid operand"),
         _ => ()
     };
+    // SUB is not valid with prefix lock = true if dest is a register location
+    match dest {
+        rm_REG(_) if lock => fail("undefined opcode exception (#UD): LOCK prefix cannot be applied to dest = reg"),
+        _ => ()
+    };
 
     // execute SUB instruction
-    let dest_val = read_operand(wsize, dest);
-    let src_val = read_operand(wsize, src);
+    let dest_val = read_operand(lock, wsize, dest);
+    let src_val = read_operand(false, wsize, src);
     let result = sub_bits(dest_val, src_val);
-    write_operand(wsize, dest, result);
+    write_operand(lock, wsize, dest, result);
 
     /* change value of status flags */
     // sign flag = msb of result (0 = +ve, 1 = -ve)
@@ -214,12 +231,12 @@ function clause execute(IMUL(wsize, dest, src)) = {
     if wsize == 8 then fail("8 bit operands are not valid for operation IMUL");
 
     // execute IMUL
-    let dest_val = read_operand(wsize, dest);
-    let src_val = read_operand(wsize, src);
+    let dest_val = read_GPR(wsize, dest);
+    let src_val = read_operand(false, wsize, src);
     let result_int = signed(dest_val) * signed(src_val);
     let result_128 = get_slice_int(wsize * 2, result_int, 0);
     let result = result_128[wsize - 1 .. 0];
-    write_operand(wsize, dest, result);
+    write_GPR(wsize, dest, result);
 
     // set carry and overflow flag if the result overflows the allocated space (wsize bits), else clear
     if sail_sign_extend(result, wsize * 2) == result_128 then {
@@ -238,7 +255,7 @@ function clause execute(CALL(rel32)) = {
     // update stack pointer to point to the new top of the stack
     RSP = sub_bits(RSP, sail_zero_extend(0x8, 64));
     // push current RIP to the stack
-    write_operand(64, rm_MEM(RSP), RIP);
+    write_operand(false, 64, rm_MEM(RSP), RIP);
     // change RIP as specified by the instruction
     RIP = add_bits(RIP, displacement);
 }
@@ -248,7 +265,7 @@ function clause execute(LEAVE()) = {
     to release the stack space allocated to the topmost stack frame */
     RSP = RBP;
     // pop value into RBP
-    RBP = read_operand(64, rm_MEM(RSP));
+    RBP = read_operand(false, 64, rm_MEM(RSP));
     // increment stack pointer to free the popped stack space
     RSP = RSP + 8;
 }
@@ -256,7 +273,7 @@ function clause execute(LEAVE()) = {
 function clause execute(RET()) = {
     /* execute near return */
     // pop value into RIP
-    RIP = read_operand(64, rm_MEM(RSP));
+    RIP = read_operand(false, 64, rm_MEM(RSP));
     // increment stack pointer to free the popped stack space
     RSP = RSP + 8;
 }

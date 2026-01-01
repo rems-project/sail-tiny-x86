@@ -28,9 +28,6 @@ function clause execute(MOV(wsize, dest, src)) = {
 
 // Decode MOV r/m{32, 64}, r{32, 64}
 function clause decode_one_byte_instruction(0x89, instruction_ptr, read_offset, decoded_prefixes) = {
-    // fail if lock prefix is set, as MOV does not support this
-    if decoded_prefixes.lock then fail("Exception #UD — Invalid Opcode (Undefined Opcode): MOV instruction does not support the LOCK prefix");
-
     // get 2 operands of the addressing method + operand type: Operand 1 = Ev, Operand 2 = Gv
     let (new_read_offset, wsize, operand1, operand2) = get_Ev_Gv_operands(instruction_ptr, read_offset, decoded_prefixes);
     // return new read offset and decoded instruction
@@ -39,9 +36,6 @@ function clause decode_one_byte_instruction(0x89, instruction_ptr, read_offset, 
 
 // Decode MOV r{32, 64}, r/m{32, 64}
 function clause decode_one_byte_instruction(0x8B, instruction_ptr, read_offset, decoded_prefixes) = {
-    // fail if lock prefix is set, as MOV does not support this
-    if decoded_prefixes.lock then fail("Exception #UD — Invalid Opcode (Undefined Opcode): MOV instruction does not support the LOCK prefix");
-
     // get 2 operands of the addressing method + operand type: Operand 1 = Gv, Operand 2 = Ev
     let (new_read_offset, wsize, operand1, operand2) = get_Gv_Ev_operands(instruction_ptr, read_offset, decoded_prefixes);
     // return new read offset and decoded instruction
@@ -98,11 +92,19 @@ function clause decode_one_byte_instruction(0x33, instruction_ptr, read_offset, 
     Some(new_read_offset, XOR(decoded_prefixes.lock, wsize, operand1, operand2))
 }
 
+/* SFENCE */
+
 // Wait_On_Following_Stores_Until(preceding_stores_globally_visible);
 function clause execute(SFENCE()) = {
     // apply barrier
     sail_barrier(Barrier_SFENCE)
 }
+
+/*
+function clause decode_three_byte_instruction(0x0FAEF8, instruction_ptr, read_offset, decoded_prefixes) = {
+    // 66 prefix not allowed!
+}
+*/
 
 // Wait_On_Following_Instructions_Until(preceding_instructions_complete);
 function clause execute(LFENCE()) = {
@@ -149,8 +151,6 @@ function clause execute(CMP(wsize, first, second)) = {
 
 // Decode CMP r/m{32, 64}, r{32, 64}
 function clause decode_one_byte_instruction(0x39, instruction_ptr, read_offset, decoded_prefixes) = {
-    // fail if lock prefix is set, as CMP does not support this
-    if decoded_prefixes.lock then fail("Exception #UD — Invalid Opcode (Undefined Opcode): CMP instruction does not support the LOCK prefix");
     // addressing method + operand type: Ev, Gv
     let (new_read_offset, wsize, operand1, operand2) = 
         get_2_type_v_operands(instruction_ptr, read_offset, addressingMethod_E, addressingMethod_G, decoded_prefixes);
@@ -159,8 +159,6 @@ function clause decode_one_byte_instruction(0x39, instruction_ptr, read_offset, 
 
 // Decode CMP r{32, 64}, r/m{32, 64}
 function clause decode_one_byte_instruction(0x3B, instruction_ptr, read_offset, decoded_prefixes) = {
-    // fail if lock prefix is set, as CMP does not support this
-    if decoded_prefixes.lock then fail("Exception #UD — Invalid Opcode (Undefined Opcode): CMP instruction does not support the LOCK prefix");
     // addressing method + operand type: Gv, Ev
     let (new_read_offset, wsize, operand1, operand2) = 
         get_2_type_v_operands(instruction_ptr, read_offset, addressingMethod_G, addressingMethod_E, decoded_prefixes);
@@ -197,7 +195,8 @@ function clause decode_one_byte_instruction(0x6A, instruction_ptr, read_offset, 
 
 // Decode PUSH imm{16, 32}
 function clause decode_one_byte_instruction(0x68, instruction_ptr, read_offset, decoded_prefixes) = {
-    let wsize = if decoded_prefixes.op_size_override then 16 else 32;
+    // Get wsize. Default is 32 bits. Ignore REX prefix as we can't have a 64 bit immediate.
+    let wsize = get_wsize_ignoring_REX(decoded_prefixes, 32);
     let (new_read_offset, imm) = decode_imm_operand(instruction_ptr, read_offset, wsize);
     Some(new_read_offset, PUSH(wsize, rmi_IMM(imm)))
 }
@@ -233,8 +232,8 @@ function clause decode_one_byte_instruction(0x5 @ is_pop: bits(1) @ reg_field: b
     if decoded_prefixes.lock then fail("Exception #UD — Invalid Opcode (Undefined Opcode): PUSH instruction does not support the LOCK prefix");
     // get register location embedded in the opcode
     let reg_index = get_reg_value_in_opcode_byte(reg_field, decoded_prefixes.REX);
-    // get wsize. For PUSH, a reg operand can either be 16 or 64 bits
-    let wsize = if decoded_prefixes.op_size_override then 16 else 64;
+    // get wsize. For PUSH, the default operand size is 64 bits. Ignore REX prefix
+    let wsize = get_wsize_ignoring_REX(decoded_prefixes, 64);
 
     if is_pop == 0b0 then
         Some(read_offset, PUSH(wsize, rmi_REG(reg_index)))
@@ -428,15 +427,30 @@ function clause decode_one_byte_instruction(0xE8, instruction_ptr, read_offset, 
     Some(new_read_offset, CALL(operand))
 }
 
-function clause execute(LEAVE()) = {
+/* LEAVE */
+
+function clause execute(LEAVE(wsize)) = {
     /* copy frame pointer (RBP) into the stack pointer register (RSP)
     to release the stack space allocated to the topmost stack frame */
     RSP = RBP;
-    // pop value into RBP
-    RBP = read_operand(false, 64, rm_MEM(RSP));
+
+    // pop value from the stack
+    let popped_value = read_operand(false, wsize, rm_MEM(RSP));
+    // store popped value in RBP
+    write_GPR(wsize, 5, popped_value);
     // increment stack pointer to free the popped stack space
-    RSP = RSP + 8;
+    RSP = RSP + (wsize / 8);
 }
+
+// Decode LEAVE instruction (operand size = 16 or 64 bits)
+function clause decode_one_byte_instruction(0xC9, instruction_ptr, read_offset, decoded_prefixes) = {
+    // Get wsize. Default wsize is 64 bits. Ignore REX prefix.
+    let wsize = get_wsize_ignoring_REX(decoded_prefixes, 64);
+    assert(wsize == 16 | wsize == 64); // required for type-checking as only LEAVE(16) and LEAVE(64) are allowed instructions
+    Some(read_offset, LEAVE(wsize))
+}
+
+/* RET */
 
 function clause execute(RET()) = {
     /* execute near return */
@@ -444,6 +458,11 @@ function clause execute(RET()) = {
     RIP = read_operand(false, 64, rm_MEM(RSP));
     // increment stack pointer to free the popped stack space
     RSP = RSP + 8;
+}
+
+// Decode near RET instruction
+function clause decode_one_byte_instruction(0xC3, instruction_ptr, read_offset, decoded_prefixes) = {
+    Some(read_offset, RET())
 }
 
 /* JMP */
@@ -487,3 +506,12 @@ function clause decode_one_byte_instruction(0x79, instruction_ptr, read_offset, 
 }
 
 end execute
+
+// Decode cases for opcodes that the model, or x86, does not support
+function clause decode_one_byte_instruction(_, instruction_ptr, read_offset, decoded_prefixes) = None()
+function clause decode_two_byte_instruction(_, instruction_ptr, read_offset, decoded_prefixes) = None()
+function clause decode_three_byte_instruction(_, instruction_ptr, read_offset, decoded_prefixes) = None()
+
+end decode_one_byte_instruction
+end decode_two_byte_instruction
+end decode_three_byte_instruction

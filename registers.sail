@@ -108,7 +108,79 @@ function write_GPR(operand_size, reg, value) = {
     }
 }
 
-/* change the value of the parity flag depending on the result of an operation */
+
+/* UPDATE RFLAGS */
+
+/* Update sign flag depending on the result of an operation */
+val update_sign_flag: forall 'm, 'm > 0. (implicit('m), bits('m)) -> unit
+function update_sign_flag(operand_size, result) = {
+    // sign flag = msb of result (0 = +ve, 1 = -ve)
+    RFLAGS[SF] = [result[operand_size - 1]];
+}
+
+/* Update overflow flag depending on the result of an operation
+Overflow flag is for signed values. */
+
+val update_overflow_flag_add_inner: (bit, bit, bit) -> unit
+function update_overflow_flag_add_inner(first_msb, second_msb, result_msb) = {
+    /* set overflow flag if, when ADDING first and second operand, 
+    first and second operand have the same sign, 
+    but the sign of the result is different */
+    RFLAGS[OF] = 
+        if (first_msb == second_msb) & not_bool(result_msb == first_msb) then 
+            0b1 
+        else 
+            0b0;
+}
+
+val update_overflow_flag_sub: forall 'm, 'm > 0. (implicit('m), bits('m), bits('m), bits('m)) -> unit
+function update_overflow_flag_sub(size, first, second, result) = 
+    update_overflow_flag_add_inner(
+        first[size - 1], 
+        flip_bit(second[size - 1]), // first - second = first + (- second)
+        result[size - 1]
+    )
+
+val update_overflow_flag_add: forall 'm, 'm > 0. (implicit('m), bits('m), bits('m), bits('m)) -> unit
+function update_overflow_flag_add(size, first, second, result) = 
+    update_overflow_flag_add_inner(
+        first[size - 1], 
+        second[size - 1], 
+        result[size - 1]
+    )
+
+/* Update carry flag depending on the result of an operation.
+Carry flag is for unsigned values (so underlying logic is different for sub and add). */
+
+val update_carry_flag_sub: forall 'm, 'm > 0. (bits('m), bits('m)) -> unit
+function update_carry_flag_sub(first, second) = {
+    // set carry flag if result < 0 (as it represents a borrow when subtracting 2 unsigned values), else clear
+    RFLAGS[CF] = if unsigned(first) < unsigned(second) then 0b1 else 0b0;
+}
+
+val update_carry_flag_add: forall 'm, 'm > 0. (implicit('m), bits('m), bits('m)) -> unit
+function update_carry_flag_add(size, first, second) = {
+    // set carry flag if actual result is too large to fit in size bits, else clear
+    RFLAGS[CF] = if unsigned(first) + unsigned(second) > 2^size - 1 then 0b1 else 0b0;
+}
+
+/* Update auxiliary carry flag depending on the result of an operation.
+Same operation as the carry flag but only concerned with least significant 4 bits of each parameter */
+
+val update_aux_carry_flag_sub: forall 'm, 'm >= 4. (bits('m), bits('m)) -> unit
+function update_aux_carry_flag_sub(first, second) = update_carry_flag_sub(first[3..0], second[3..0])
+
+val update_aux_carry_flag_add: forall 'm, 'm >= 4. (bits('m), bits('m)) -> unit
+function update_aux_carry_flag_add(first, second) = update_carry_flag_add(first[3..0], second[3..0])
+
+/* Update zero flag depending on the result of an operation */
+val update_zero_flag: forall 'm, 'm >= 8. (implicit('m), bits('m)) -> unit
+function update_zero_flag(operand_size, result) = {
+    // set zero flag if result = 0, else clear zero flag
+    RFLAGS[ZF] = if result == sail_zero_extend(0x0, operand_size) then 0b1 else 0b0;
+}
+
+/* Update parity flag depending on the result of an operation */
 val update_parity_flag: forall 'm, 'm >= 8. bits('m) -> unit
 function update_parity_flag(result) = {
     // we set if least significant byte of result has an even number of 1s, else clear
@@ -117,4 +189,26 @@ function update_parity_flag(result) = {
         if result[i] == bitone then even_parity = flip_bit(even_parity);
     };
     RFLAGS[PF] = [even_parity];
+}
+
+/* Update RFLAGS for sub and add operations */
+
+val update_RFLAGS_sub: forall 'm, 'm >=8. (bits('m), bits('m), bits('m)) -> unit
+function update_RFLAGS_sub(first, second, result) = {
+    update_sign_flag(result);
+    update_overflow_flag_sub(first, second, result);
+    update_carry_flag_sub(first, second);
+    update_zero_flag(result);
+    update_aux_carry_flag_sub(first, second);
+    update_parity_flag(result);
+}
+
+val update_RFLAGS_add: forall 'm, 'm >=8. (bits('m), bits('m), bits('m)) -> unit
+function update_RFLAGS_add(first, second, result) = {
+    update_sign_flag(result);
+    update_overflow_flag_add(first, second, result);
+    update_carry_flag_add(first, second);
+    update_zero_flag(result);
+    update_aux_carry_flag_add(first, second);
+    update_parity_flag(result);
 }

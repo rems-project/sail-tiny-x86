@@ -130,11 +130,9 @@ function clause execute(XOR(lock, operand_size, dest, src)) = {
     // clear overflow and carry flag
     RFLAGS[OF] = 0b0;
     RFLAGS[CF] = 0b0;
-    // sign flag = msb of result (0 = +ve, 1 = -ve)
-    RFLAGS[SF] = [result[operand_size - 1]];
-    // set zero flag if result = 0, else clear zero flag
-    RFLAGS[ZF] = if result == sail_zero_extend(0x0, operand_size) then 0b1 else 0b0;
-    // set parity flag if least significant byte of result contains an even number of 1 bits, else clear
+    // assign values to other flags (but not AF as its value is undefined for XOR)
+    update_sign_flag(result);
+    update_zero_flag(result);
     update_parity_flag(result);
 }
 
@@ -286,18 +284,7 @@ function clause execute(CMP(operand_size, first, second)) = {
     let result = sub_bits(first_val, second_val);
 
     /* change value of status flags. Equivalent to the changes made on executing the SUB instruction. */
-    // sign flag = msb of result (0 = +ve, 1 = -ve)
-    RFLAGS[SF] = [result[operand_size - 1]];
-    // set overflow flag (which is for signed values) if first and second operand have opposite signs, but the sign of the result doesn't match the first operand, else clear
-    RFLAGS[OF] = if not_bool(first_val[operand_size - 1] == second_val[operand_size - 1]) & not_bool(result[operand_size - 1] == first_val[operand_size - 1]) then 0b1 else 0b0;
-    // set carry flag if result < 0 (as it represents a borrow when subtracting 2 unsigned values), else clear
-    RFLAGS[CF] = if unsigned(first_val) < unsigned(second_val) then 0b1 else 0b0;
-    // set zero flag if result = 0, else clear zero flag
-    RFLAGS[ZF] = if result == sail_zero_extend(0x0, operand_size) then 0b1 else 0b0;
-    // Set aux carry flag if an arithmetic operation generates a borrow out of bit 3 (i.e. least significant 4 bits) of the result; cleared otherwise
-    RFLAGS[AF] = if unsigned(first_val[3 .. 0]) < unsigned(second_val[3 .. 0]) then 0b1 else 0b0;
-    // set parity flag if least significant byte of result contains an even number of 1 bits, else clear
-    update_parity_flag(result);
+    update_RFLAGS_sub(first_val, second_val, result);
 }
 
 // Decode CMP r/m8, r8
@@ -464,18 +451,7 @@ function clause execute(ADD(lock, operand_size, dest, src)) = {
     write_operand(lock, operand_size, dest, result);
 
     /* change value of status flags */
-    // sign flag = msb of result (0 = +ve, 1 = -ve)
-    RFLAGS[SF] = [result[operand_size - 1]];
-    // set overflow flag (which is for signed values) if dest and src operand have the same sign, but the sign of the result is different
-    RFLAGS[OF] = if dest_val[operand_size - 1] == src_val[operand_size - 1] & not_bool(result[operand_size - 1] == dest_val[operand_size - 1]) then 0b1 else 0b0;
-    // set carry flag (which is for unsigned values) if result is smaller than dest or src, else clear
-    RFLAGS[CF] = if unsigned(result) < unsigned(dest_val) | unsigned(result) < unsigned(src_val) then 0b1 else 0b0;
-    // set zero flag if result = 0, else clear zero flag
-    RFLAGS[ZF] = if result == sail_zero_extend(0x0, operand_size) then 0b1 else 0b0;
-    // Set aux carry flag if an arithmetic operation generates a carry out of bit 3 (i.e. least significant 4 bits) of the result; cleared otherwise
-    RFLAGS[AF] = if unsigned(dest_val[3 .. 0]) + unsigned(src_val[3 .. 0]) >= 16 then 0b1 else 0b0;
-    // set parity flag if least significant byte of result contains an even number of 1 bits, else clear
-    update_parity_flag(result);
+    update_RFLAGS_add(dest_val, src_val, result);
 }
 
 // Decode ADD r/m8, r8
@@ -535,18 +511,7 @@ function clause execute(SUB(lock, operand_size, dest, src)) = {
     write_operand(lock, operand_size, dest, result);
 
     /* change value of status flags */
-    // sign flag = msb of result (0 = +ve, 1 = -ve)
-    RFLAGS[SF] = [result[operand_size - 1]];
-    // set overflow flag (which is for signed values) if dest and src operand have opposite signs, but the sign of the result doesn't match the dest operand, else clear
-    RFLAGS[OF] = if not_bool(dest_val[operand_size - 1] == src_val[operand_size - 1]) & not_bool(result[operand_size - 1] == dest_val[operand_size - 1]) then 0b1 else 0b0;
-    // set carry flag if result < 0 (as it represents a borrow when subtracting 2 unsigned values), else clear
-    RFLAGS[CF] = if unsigned(dest_val) < unsigned(src_val) then 0b1 else 0b0;
-    // set zero flag if result = 0, else clear zero flag
-    RFLAGS[ZF] = if result == sail_zero_extend(0x0, operand_size) then 0b1 else 0b0;
-    // Set aux carry flag if an arithmetic operation generates a borrow out of bit 3 (i.e. least significant 4 bits) of the result; cleared otherwise
-    RFLAGS[AF] = if unsigned(dest_val[3 .. 0]) < unsigned(src_val[3 .. 0]) then 0b1 else 0b0;
-    // set parity flag if least significant byte of result contains an even number of 1 bits, else clear
-    update_parity_flag(result);
+    update_RFLAGS_sub(dest_val, src_val, result);
 }
 
 // Decode SUB r/m8, r8

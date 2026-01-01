@@ -29,26 +29,25 @@ union rmi_operand = {
 /* permitted word sizes */
 type word_size = {8,16,32,64}
 
-/* read immediate value from variable bit-extended to 64 bits */
+/* read immediate value */
 val read_imm: forall 'm, 'm in {8, 16, 32, 64}. (int('m), imm) -> bits('m)
 function read_imm(wsize, imm) = {
-    // If imm size is smaller than word size, then sign-extend the imm before returning it
     match imm {
         IMM8(value) => {
             assert(wsize == 8, "Immediate value size is 8 bits, but word size is not.");
-            value[7 .. 0]
+            value
         },
         IMM16(value) => {
             assert(wsize == 16, "Immediate value size is 16 bits, but word size is not.");
-            value[15 .. 0]
+            value
         },
         IMM32(value) => {
             assert(wsize >= 32, "Immediate value size is 32 bits, but word size is not 32 or 64 bits.");
-            sail_sign_extend(value[31 .. 0], wsize)
+            sail_sign_extend(value, wsize)
         },
         IMM64(value) => {
             assert(wsize == 64, "Immediate value size is 64 bits, but word size is not.");
-            value[63 .. 0]
+            value
         },
     }
 }

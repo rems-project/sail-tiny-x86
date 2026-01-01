@@ -3,7 +3,7 @@ type reg_index = range(0, 15)
 
 // operand representation of register locations
 union reg = {
-    REG_HIGH_BYTE_ENABLED: reg_index,
+    REG_HIGH_BYTE: range(4, 7),
     REG_NORMAL: reg_index
 }
 
@@ -73,18 +73,12 @@ register RFLAGS: rflags
             reg[operand_size - 1 .. 0]
         },
         // read 8 bits from register. Read high byte depending on reg_index (i)
-        REG_HIGH_BYTE_ENABLED(i) => {
+        REG_HIGH_BYTE(i) => {
             assert(operand_size == 8, "Register is high byte enabled but operand size is not 8 bits");
-            if i >= 4 & i <= 7 then {
-                // Read high byte register
-                // AH = RAX[15 .. 8], CH = RCX[15 .. 8], DH = RDX[15 .. 8], BH = RBX[15 .. 8]
-                let reg = *GPRs[i - 4];
-                (*GPRs[i - 4])[15 .. 8]
-            }
-            else {
-                let reg = *GPRs[i];
-                reg[7 .. 0]
-            }
+            // Read high byte register
+            // AH = RAX[15 .. 8], CH = RCX[15 .. 8], DH = RDX[15 .. 8], BH = RBX[15 .. 8]
+            let reg = *GPRs[i - 4];
+            (*GPRs[i - 4])[15 .. 8]
         }
     }
 }
@@ -105,17 +99,11 @@ function write_GPR(operand_size, reg, value) = {
                 (*GPRs[i])[operand_size - 1 .. 0] = value;
         },
         // write 8 bits to a register. Write to low or high byte depending on reg_index (i)
-        REG_HIGH_BYTE_ENABLED(i) => {
+        REG_HIGH_BYTE(i) => {
             assert(operand_size == 8, "Register is high byte enabled but operand size is not 8 bits");
-            if i >= 4 & i <= 7 then {
-                // Write to high byte register
-                // AH = RAX[15 .. 8], CH = RCX[15 .. 8], DH = RDX[15 .. 8], BH = RBX[15 .. 8]
-                (*GPRs[i - 4])[15 .. 8] = value;
-            }
-            else {
-                // the value is written to the last 8 bits of the register
-                (*GPRs[i])[7 .. 0] = value;
-            }
+            // Write to high byte register
+            // AH = RAX[15 .. 8], CH = RCX[15 .. 8], DH = RDX[15 .. 8], BH = RBX[15 .. 8]
+            (*GPRs[i - 4])[15 .. 8] = value;
         }
     }
 }

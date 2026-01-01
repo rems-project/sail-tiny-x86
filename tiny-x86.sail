@@ -171,12 +171,12 @@ function clause decode_one_byte_instruction(0x33, instruction_ptr, read_offset, 
 }
 
 // Decode XOR, ADD, SUB, CMP r/m{8, 16, 32, 64} imm{8, 16, 32, 32}
-/* WARNING: Opcodes 80 (r/m8 r8) and 81 (all others) encode a group of instructions. 
+/* WARNING: Opcodes 80 (r/m8 imm8) and 81 (all others) encode a group of instructions. 
 The exact instruction encoded is specified in the reg field of the mod r/m byte.
 Out of all instructions with opcodes 80 and 81, we currently only support the ADD, SUB, XOR and CMP instructions. */
 function clause decode_one_byte_instruction(0b1000_000 @ not_8_bit, instruction_ptr, read_offset, decoded_prefixes) = {
     // fetch mod r/m byte
-    let (read_offset_2, mod_rm_byte) = read_mod_rm_byte(instruction_ptr, read_offset);
+    let (read_offset, mod_rm_byte) = read_mod_rm_byte(instruction_ptr, read_offset);
 
     // get operands
     let (new_read_offset, operand_size, operand1, imm) = {
@@ -228,13 +228,13 @@ function clause decode_two_byte_instruction(0x0FAE, instruction_ptr, read_offset
             0b101 => {
                 // LFENCE
                 // Use of 66 / F2 / F3 prefixes are not allowed in the instruction. Only prefix 66 has been implemented in this model.
-                if decoded_prefixes.op_size_override then fail("Prefix 66H is not allowed in the SFENCE instruction");
+                if decoded_prefixes.op_size_override then fail("Prefix 66H is not allowed in the LFENCE instruction");
                 Some(new_read_offset, LFENCE())
             },
             0b110 => {
                 // MFENCE
                 // Use of 66 / F2 / F3 prefixes are not allowed in the instruction. Only prefix 66 has been implemented in this model.
-                if decoded_prefixes.op_size_override then fail("Prefix 66H is not allowed in the SFENCE instruction");
+                if decoded_prefixes.op_size_override then fail("Prefix 66H is not allowed in the MFENCE instruction");
                 Some(new_read_offset, MFENCE())
             },
             _ => {
@@ -705,7 +705,7 @@ function clause execute(JMP(rel8)) = {
 }
 
 // Decode JMP rel8
-function clause decode_one_byte_instruction(0xE8, instruction_ptr, read_offset, decoded_prefixes) = {
+function clause decode_one_byte_instruction(0xEB, instruction_ptr, read_offset, decoded_prefixes) = {
     // read 8-bit immediate
     let operand = read_memory(1, instruction_ptr + read_offset, create_iFetchAccessDescriptor());
     // increment read offset

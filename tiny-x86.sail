@@ -7,9 +7,6 @@ function fail_if_two_mem_operands(dest, src, operation) = {
     }
 }
 
-val execute : ast -> unit
-scattered function execute
-
 /* MOV */
 
 function clause execute(MOV(operand_size, dest, src)) = {

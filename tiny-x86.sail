@@ -22,8 +22,8 @@ function clause execute(MOV(operand_size, dest, src)) = {
     };
 
     // execute MOV instruction
-    let val_to_write = read_operand(false, operand_size, src);
-    write_operand(false, operand_size, dest, val_to_write)
+    let val_to_write = read_operand(operand_size, src);
+    write_operand(operand_size, dest, val_to_write)
 }
 
 // Decode MOV r/m{32, 64}, r{32, 64}
@@ -222,8 +222,8 @@ function clause execute(CMP(operand_size, first, second)) = {
     };
 
     // execute CMP instruction
-    let first_val = read_operand(false, operand_size, first);
-    let second_val = read_operand(false, operand_size, second);
+    let first_val = read_operand(operand_size, first);
+    let second_val = read_operand(operand_size, second);
     let result = sub_bits(first_val, second_val);
 
     /* change value of status flags. Equivalent to the changes made on executing the SUB instruction. */
@@ -273,12 +273,12 @@ function clause execute(PUSH(operand_size, src)) = {
 
     // If the source operand is an immediate of size less than the operand size, then sign-extend the value
     // default operand size is 8 bytes = 64 bits
-    let src_val = sail_sign_extend(read_operand(false, operand_size, src), 64);
+    let src_val = sail_sign_extend(read_operand(operand_size, src), 64);
     // subtract 8 from RSP to point to the new top of the stack
     RSP = sub_bits(RSP, sail_zero_extend(0x8, 64));
     // push the new item to the top of the stack
     let dest_address = rm_MEM(RSP);
-    write_operand(false, 64, dest_address, src_val)
+    write_operand(64, dest_address, src_val)
 }
 
 // Decode PUSH imm8
@@ -342,8 +342,8 @@ function clause execute(POP(operand_size, dest)) = {
     if operand_size == 16 then fail("dest size for POP operation not implemented in this model");
 
     // pop the value at the top of the stack to dest
-    let popped_val = read_operand(false, 64, rm_MEM(RSP));
-    write_operand(false, 64, dest, popped_val);
+    let popped_val = read_operand(64, rm_MEM(RSP));
+    write_operand(64, dest, popped_val);
     // increment stack pointer to free the popped stack space
     RSP = RSP + 8;
 }
@@ -483,7 +483,7 @@ function clause execute(IMUL(operand_size, dest, src)) = {
 
     // execute IMUL
     let dest_val = read_GPR(operand_size, dest);
-    let src_val = read_operand(false, operand_size, src);
+    let src_val = read_operand(operand_size, src);
     let result_int = signed(dest_val) * signed(src_val);
     let result_128 = get_slice_int(operand_size * 2, result_int, 0);
     let result = result_128[operand_size - 1 .. 0];
@@ -531,7 +531,7 @@ function clause execute(CALL(rel32)) = {
     // update stack pointer to point to the new top of the stack
     RSP = sub_bits(RSP, sail_zero_extend(0x8, 64));
     // push current RIP to the stack
-    write_operand(false, 64, rm_MEM(RSP), RIP);
+    write_operand(64, rm_MEM(RSP), RIP);
     // change RIP as specified by the instruction
     RIP = add_bits(RIP, displacement);
 }
@@ -556,7 +556,7 @@ function clause execute(LEAVE(operand_size)) = {
     RSP = RBP;
 
     // pop value from the stack
-    let popped_value = read_operand(false, operand_size, rm_MEM(RSP));
+    let popped_value = read_operand(operand_size, rm_MEM(RSP));
     // store popped value in RBP
     write_GPR(operand_size, 5, popped_value);
     // increment stack pointer to free the popped stack space
@@ -576,7 +576,7 @@ function clause decode_one_byte_instruction(0xC9, instruction_ptr, read_offset, 
 function clause execute(RET()) = {
     /* execute near return */
     // pop value into RIP
-    RIP = read_operand(false, 64, rm_MEM(RSP));
+    RIP = read_operand(64, rm_MEM(RSP));
     // increment stack pointer to free the popped stack space
     RSP = RSP + 8;
 }

@@ -78,8 +78,8 @@ function write_GPR(wsize, i: reg_index, value) = {
 }
 
 /* change the value of the parity flag depending on the result of an operation */
-val modify_parity_flag: forall 'm, 'm >= 8. bits('m) -> unit
-function modify_parity_flag(result) = {
+val update_parity_flag: forall 'm, 'm >= 8. bits('m) -> unit
+function update_parity_flag(result) = {
     // we set if least significant byte of result has an even number of 1s, else clear
     var even_parity = bitone;
     foreach (i from 0 to 7) {

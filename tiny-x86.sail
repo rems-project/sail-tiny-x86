@@ -67,7 +67,7 @@ function clause execute(XOR(wsize, dest, src)) = {
     // set zero flag if result = 0, else clear zero flag
     RFLAGS[ZF] = if result == sail_zero_extend(0x0, wsize) then 0b1 else 0b0;
     // set parity flag if least significant byte of result contains an even number of 1 bits, else clear
-    modify_parity_flag(result);
+    update_parity_flag(result);
 }
 
 // Wait_On_Following_Stores_Until(preceding_stores_globally_visible);
@@ -114,7 +114,7 @@ function clause execute(CMP(wsize, first, second)) = {
     // Set aux carry flag if an arithmetic operation generates a borrow out of bit 3 (i.e. least significant 4 bits) of the result; cleared otherwise
     RFLAGS[AF] = if unsigned(first_val[3 .. 0]) < unsigned(second_val[3 .. 0]) then 0b1 else 0b0;
     // set parity flag if least significant byte of result contains an even number of 1 bits, else clear
-    modify_parity_flag(result);
+    update_parity_flag(result);
 }
 
 function clause execute(PUSH(wsize, src)) = {
@@ -176,7 +176,7 @@ function clause execute(ADD(wsize, dest, src)) = {
     // Set aux carry flag if an arithmetic operation generates a carry out of bit 3 (i.e. least significant 4 bits) of the result; cleared otherwise
     RFLAGS[AF] = if unsigned(dest_val[3 .. 0]) + unsigned(src_val[3 .. 0]) >= 16 then 0b1 else 0b0;
     // set parity flag if least significant byte of result contains an even number of 1 bits, else clear
-    modify_parity_flag(result);
+    update_parity_flag(result);
 }
 
 function clause execute(SUB(wsize, dest, src)) = {
@@ -206,7 +206,7 @@ function clause execute(SUB(wsize, dest, src)) = {
     // Set aux carry flag if an arithmetic operation generates a borrow out of bit 3 (i.e. least significant 4 bits) of the result; cleared otherwise
     RFLAGS[AF] = if unsigned(dest_val[3 .. 0]) < unsigned(src_val[3 .. 0]) then 0b1 else 0b0;
     // set parity flag if least significant byte of result contains an even number of 1 bits, else clear
-    modify_parity_flag(result);
+    update_parity_flag(result);
 }
 
 function clause execute(IMUL(wsize, dest, src)) = {
@@ -217,12 +217,12 @@ function clause execute(IMUL(wsize, dest, src)) = {
     let dest_val = read_operand(wsize, dest);
     let src_val = read_operand(wsize, src);
     let result_int = signed(dest_val) * signed(src_val);
-    let result_temp = get_slice_int(wsize * 2, result_int, 0);
-    let result = result_temp[wsize - 1 .. 0];
+    let result_128 = get_slice_int(wsize * 2, result_int, 0);
+    let result = result_128[wsize - 1 .. 0];
     write_operand(wsize, dest, result);
 
     // set carry and overflow flag if the result overflows the allocated space (wsize bits), else clear
-    if sail_sign_extend(result, wsize * 2) == result_temp then {
+    if sail_sign_extend(result, wsize * 2) == result_128 then {
         RFLAGS[CF] = 0b0;
         RFLAGS[OF] = 0b0;
     }
@@ -234,12 +234,11 @@ function clause execute(IMUL(wsize, dest, src)) = {
 
 function clause execute(CALL(rel32)) = {
     /* execute near relative call */
-    let displacement = read_operand(64, IMM32(rel32));
+    let displacement = sail_sign_extend(rel32, 64);
     // update stack pointer to point to the new top of the stack
     RSP = sub_bits(RSP, sail_zero_extend(0x8, 64));
     // push current RIP to the stack
-    let dest_address = rm_MEM(RSP);
-    write_operand(64, dest_address, RIP);
+    write_operand(64, rm_MEM(RSP), RIP);
     // change RIP as specified by the instruction
     RIP = add_bits(RIP, displacement);
 }
@@ -265,7 +264,7 @@ function clause execute(RET()) = {
 function clause execute(JMP(rel8)) = {
     /* execute jump short */
     // add the operand to the current instruction pointer value
-    let displacement = sail_sign_extend(read_operand(8, IMM8(rel8)), 64);
+    let displacement = sail_sign_extend(rel8, 64);
     RIP = RIP + displacement;
 }
 
@@ -273,7 +272,7 @@ function clause execute(JNS(rel8)) = {
     /* execute jump short if not sign */
     if RFLAGS[SF] == 0b0 then {
         // add the operand to the current instruction pointer value
-        let displacement = sail_sign_extend(read_operand(8, IMM8(rel8)), 64);
+        let displacement = sail_sign_extend(rel8, 64);
         RIP = RIP + displacement;
     }
 }

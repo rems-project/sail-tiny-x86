@@ -49,7 +49,7 @@ function clause decode_one_byte_instruction(0xB @ 0b1 @ reg_field, instruction_p
     // Get wsize. Default is 32 bits.
     let wsize = get_wsize_using_REX(decoded_prefixes, 32);
     // get imm operand
-    let (new_read_offset, imm) = decode_imm_operand(instruction_ptr, read_offset, wsize);
+    let (new_read_offset, imm) = read_imm_operand(instruction_ptr, read_offset, wsize);
     // return new read offset and decoded instruction
     Some(new_read_offset, MOV(wsize, rm_REG(reg_index), rmi_IMM(imm)))
 }
@@ -283,7 +283,7 @@ function clause execute(PUSH(wsize, src)) = {
 
 // Decode PUSH imm8
 function clause decode_one_byte_instruction(0x6A, instruction_ptr, read_offset, decoded_prefixes) = {
-    let (new_read_offset, imm) = decode_imm_operand(instruction_ptr, read_offset, 8);
+    let (new_read_offset, imm) = read_imm_operand(instruction_ptr, read_offset, 8);
     Some(new_read_offset, PUSH(8, rmi_IMM(imm)))
 }
 
@@ -291,7 +291,7 @@ function clause decode_one_byte_instruction(0x6A, instruction_ptr, read_offset, 
 function clause decode_one_byte_instruction(0x68, instruction_ptr, read_offset, decoded_prefixes) = {
     // Get wsize. Default is 32 bits. Ignore REX prefix as we can't have a 64 bit immediate.
     let wsize = get_wsize_ignoring_REX(decoded_prefixes, 32);
-    let (new_read_offset, imm) = decode_imm_operand(instruction_ptr, read_offset, wsize);
+    let (new_read_offset, imm) = read_imm_operand(instruction_ptr, read_offset, wsize);
     Some(new_read_offset, PUSH(wsize, rmi_IMM(imm)))
 }
 

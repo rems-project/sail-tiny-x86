@@ -1,19 +1,5 @@
-type reg_index = range(0, 15) // range of registers that one can refer to
-type word_size = {8,16,32,64}
-type imm8 = bits(8)
-type imm16 = bits(16)
-type imm32 = bits(32)
-type imm64 = bits(64)
-union imm = {
-    IMM8: imm8,
-    IMM16: imm16,
-    IMM32: imm32,
-    IMM64: imm64
-}
-union imm_or_reg = {
-    IMM: imm,
-    REG: reg_index
-}
+/* range of registers that one can refer to */
+type reg_index = range(0, 15)
 
 /* program counter */
 
@@ -58,35 +44,46 @@ let GPRs : vector(16, register(bits(64))) = [
     ref RAX
 ]
 
-/* status flags, part of register RFLAGS (which is mostly restricted access) */
-// could use bitfield for this
-register CF: bits(1) // bit 0
-register PF: bits(1) // bit 2
-register AF: bits(1) // bit 4
-register ZF: bits(1) // bit 6
-register SF: bits(1) // bit 7
-register OF: bits(1) // bit 11
+/* register RFLAGS, system and status flags + mostly restricted access */
+bitfield rflags : bits(64) = {
+    // status flags
+    OF: 11, // overflow flag (for operations between signed values)
+    SF: 7, // sign flag
+    ZF: 6, // zero flag
+    AF: 4, // auxiliary carry flag
+    PF: 2, // parity flag
+    CF: 0 // carry flag (for operations between unsigned values)
+}
+register RFLAGS: rflags
 
-/*
-read and write least-significant 8,16,32,64 (32 with 0 extend for write) bits 
- */
+/* read and write least-significant 8,16,32,64 (32 with 0 extend for write) bits */
+ val read_GPR: forall 'm, 'm in {8, 16, 32, 64}. (int('m), reg_index) -> bits('m)
 
- val read_reg: forall 'm, 'm in {8, 16, 32, 64}. (int('m), reg_index) -> bits('m)
-
- function read_reg(wsize, i: reg_index) = {
+ function read_GPR(wsize, i: reg_index) = {
     let reg = *GPRs[i];
     reg[wsize - 1 .. 0]
 }
 
-val write_reg: forall 'm, 'm in {8, 16, 32, 64}. (int('m), reg_index, bits('m)) -> unit
+val write_GPR: forall 'm, 'm in {8, 16, 32, 64}. (int('m), reg_index, bits('m)) -> unit
 
-function write_reg(wsize, i: reg_index, value) = {
+function write_GPR(wsize, i: reg_index, value) = {
     if wsize == 32 then {
         // if writing 32 bits to a register, the value to be written is zero-extended to 64 bits
-        (*GPRs[i])[63 .. 32]= 0x0000_0000;
-        (*GPRs[i])[31 .. 0]= value;
+        (*GPRs[i])[63 .. 32] = 0x0000_0000;
+        (*GPRs[i])[31 .. 0] = value;
     }
     else
         // the value is written to the last wsize bits of the register
         (*GPRs[i])[wsize - 1 .. 0] = value;
+}
+
+/* change the value of the parity flag depending on the result of an operation */
+val update_parity_flag: forall 'm, 'm >= 8. bits('m) -> unit
+function update_parity_flag(result) = {
+    // we set if least significant byte of result has an even number of 1s, else clear
+    var even_parity = bitone;
+    foreach (i from 0 to 7) {
+        if result[i] == bitone then even_parity = flip_bit(even_parity);
+    };
+    RFLAGS[PF] = [even_parity];
 }

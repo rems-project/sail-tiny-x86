@@ -10,6 +10,9 @@ overload operator == = {eq_any, eq_bits_int}
 
 overload operator / = {tdiv_int}
 
+val mod: (int, int) -> int
+function mod(x, y) = tmod_int(x, y)
+
 val fail: string -> unit
 function fail(message) = assert(false, message)
 

@@ -142,12 +142,29 @@ function write_instruction_to_memory(m, inst, instruction_ptr) = {
   write_memory(m, instruction_ptr, res, create_writeAccessDescriptor())
 }
 
-function test_decode() -> unit = {
+function decode_mov_rm32_r32() -> unit = {
   // Testing that MOV RBP, RSP is decoded correctly
   let old_rip = RIP;
-  write_instruction_to_memory(0x89E5, RIP); // we prob actually need to write instructions byte by byte
+  let instruction: bits(16) = 0x89 @ 0b11_100_101;
+  write_instruction_to_memory(instruction, RIP);
   let (new_rip, decoded_instruction) = decode(RIP);
-  assert(decoded_instruction == MOV(32, rm_REG(5), rmi_REG(4)), "MOV(32, reg, reg) instruction not decoded properly");
+  assert(decoded_instruction == MOV(32, rm_REG(5), rmi_REG(4)), "MOV(32, rm32, r32) instruction not decoded properly");
+}
+
+function decode_mov_r64_rm64() -> unit = {
+  // Testing that MOV R12, M(R13) is decoded correctly
+  let old_rip = RIP;
+  let instruction: bits(24) = 0b0100_1101 @ 0x8B @ 0b00_100_101;
+  write_instruction_to_memory(instruction, RIP);
+  write_GPR(64, 5 + 8, 0xFEDC_BA98_7654_3210);
+  let expected_rmi_MEM = read_GPR(64, 5 + 8);
+  let (new_rip, decoded_instruction) = decode(RIP);
+  assert(decoded_instruction == MOV(64, rm_REG(4 + 8), rmi_MEM(expected_rmi_MEM)), "MOV(64, r64, rm64) instruction not decoded properly");
+}
+
+function test_decode() -> unit = {
+  decode_mov_rm32_r32();
+  decode_mov_r64_rm64();
 }
 
 function main() : unit -> unit = {

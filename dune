@@ -1,0 +1,18 @@
+(coq.theory
+ (name SailTinyX86)
+ (package coq-sail-tiny-x86)
+ (modules
+   Tiny_x86
+   Tiny_x86_types
+ )
+ (theories Stdlib stdpp stdpp.bitvector SailStdpp RecordUpdate Ltac2)
+)
+
+(rule
+ (deps sail_files (:sail %{read-lines:sail_files}) (env_var SAIL_OPTS) (env_var SAIL_COQ_OPTS) (package sail))
+ (targets Tiny_x86.v Tiny_x86_types.v)
+ (action
+  (run sail %{env:SAIL_OPTS=--strict-var}
+       --coq %{env:SAIL_COQ_OPTS=--coq-record-update}
+       -o Tiny_x86 %{sail}))
+)

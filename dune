@@ -16,3 +16,12 @@
        --coq %{env:SAIL_COQ_OPTS=--coq-record-update}
        -o Tiny_x86 %{sail}))
 )
+
+(rule
+ (alias snapshot)
+ (mode promote)
+ (action
+  (concurrent
+   (diff snapshot/Tiny_x86_types.v Tiny_x86_types.v)
+   (diff snapshot/Tiny_x86.v Tiny_x86.v)
+)))

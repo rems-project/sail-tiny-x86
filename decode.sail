@@ -73,8 +73,8 @@ enum addressingMethod = {
 
 // resets a prefix if it is ignored when not the last prefix
 val reset_prefixes_not_at_end: decodedPrefixes -> decodedPrefixes
-function reset_prefixes_not_at_end(decodedPrefixes) = {
-    {decodedPrefixes with 
+function reset_prefixes_not_at_end(decoded_prefixes) = {
+    {decoded_prefixes with 
         // 66H is only counted as a mandatory prefix if it is the last prefix (other than REX) to occur
         mandatory_prefix_66H = false, 
         // REX prefix is only used if it is the last prefix to occur

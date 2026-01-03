@@ -5,8 +5,15 @@ MODEL_WITH_TEST=$(MODEL) tests.sail
 export SAIL_OPTS=--strict-var
 export SAIL_COQ_OPTS=--coq-record-update
 
-rocq: $(MODEL)
+default: rocq
+
+rocq:
 	dune build;
+
+rocq-snapshot:
+	@# First build the file and then check that they match
+	-dune build @snapshot --auto-promote
+	@dune build @snapshot
 
 type-check:
 	sail $(SAIL_OPTS) --just-check $(MODEL_WITH_TEST)
@@ -20,4 +27,4 @@ test.o: test.c
 test.c: $(MODEL_WITH_TEST)
 	sail -c $(MODEL_WITH_TEST) -o test;
 
-.PHONY: rocq type-check test
+.PHONY: default rocq rocq-snapshot type-check test

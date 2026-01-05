@@ -706,44 +706,65 @@ Definition reset_prefixes_not_at_end (decoded_prefixes : decodedPrefixes) : deco
    <|decodedPrefixes_mandatory_prefix_66H := false|>
    <|decodedPrefixes_REX := (Ox"00")  : mword 8|>.
 
-Fixpoint decode_prefix_inner
+Fixpoint _rec_decode_prefix_inner
 (instruction_ptr : mword 64) (read_offset : Z) (decoded_prefixes : decodedPrefixes)
-(prev_prefix : mword 8)
+(prev_prefix : mword 8) (max_iters : Z) (_reclimit : Z) (_acc : Acc (Zwf 0) _reclimit)
+{struct _acc} : M ((Z * decodedPrefixes)).
+exact (
+   assert_exp' (Z.geb (_reclimit) (0)) "recursion limit reached" >>= fun _ =>
+   (if Z.eqb (max_iters) (0) then returnM ((read_offset, decoded_prefixes))
+    else
+      (read_memory (1) ((add_vec_int (instruction_ptr) (read_offset)))
+         ((create_iFetchAccessDescriptor (tt)))) >>= fun (next_prefix : bits 8) =>
+      (if eq_vec (next_prefix) (((Ox"F0")  : mword 8)) return M ((Z * decodedPrefixes)) then
+         let reset_decoded_prefixes := reset_prefixes_not_at_end (decoded_prefixes) in
+         let new_decoded_prefixes := reset_decoded_prefixes <|decodedPrefixes_lock := true|> in
+         (_rec_decode_prefix_inner (instruction_ptr) ((Z.add (read_offset) (1)))
+            (new_decoded_prefixes) (next_prefix) ((Z.sub (max_iters) (1))) ((Z.sub (_reclimit) (1)))
+            (_limit_reduces_bool _acc ltac:(assumption)))
+          : M ((Z * decodedPrefixes))
+       else if eq_vec (next_prefix) (((Ox"66")  : mword 8)) return M ((Z * decodedPrefixes)) then
+         let reset_decoded_prefixes := reset_prefixes_not_at_end (decoded_prefixes) in
+         let new_decoded_prefixes :=
+           reset_decoded_prefixes
+           <|decodedPrefixes_op_size_override := true|>
+           <|decodedPrefixes_mandatory_prefix_66H := true|> in
+         (_rec_decode_prefix_inner (instruction_ptr) ((Z.add (read_offset) (1)))
+            (new_decoded_prefixes) (next_prefix) ((Z.sub (max_iters) (1))) ((Z.sub (_reclimit) (1)))
+            (_limit_reduces_bool _acc ltac:(assumption)))
+          : M ((Z * decodedPrefixes))
+       else if eq_vec ((subrange_vec_dec (next_prefix) (7) (4))) (((Ox"4")  : mword 4))
+         return
+         M ((Z * decodedPrefixes)) then
+         let reset_decoded_prefixes :=
+           if eq_vec (prev_prefix) (((Ox"66")  : mword 8)) then decoded_prefixes
+           else reset_prefixes_not_at_end (decoded_prefixes) in
+         let rex_contents : REX_typ := next_prefix in
+         let new_decoded_prefixes := reset_decoded_prefixes <|decodedPrefixes_REX := rex_contents|> in
+         (_rec_decode_prefix_inner (instruction_ptr) ((Z.add (read_offset) (1)))
+            (new_decoded_prefixes) (next_prefix) ((Z.sub (max_iters) (1))) ((Z.sub (_reclimit) (1)))
+            (_limit_reduces_bool _acc ltac:(assumption)))
+          : M ((Z * decodedPrefixes))
+       else
+         (_rec_decode_prefix_inner (instruction_ptr) (read_offset) (decoded_prefixes) (prev_prefix)
+            (0) ((Z.sub (_reclimit) (1))) (_limit_reduces_bool _acc ltac:(assumption)))
+          : M ((Z * decodedPrefixes)))
+       : M ((Z * decodedPrefixes)))
+    : M ((Z * decodedPrefixes))
+).
+Defined.
+
+
+Definition decode_prefix_inner
+(_arg0 : mword 64) (_arg1 : Z) (_arg2 : decodedPrefixes) (_arg3 : mword 8) (max_iters : Z)
 : M ((Z * decodedPrefixes)) :=
-   (read_memory (1) ((add_vec_int (instruction_ptr) (read_offset)))
-      ((create_iFetchAccessDescriptor (tt)))) >>= fun (next_prefix : bits 8) =>
-   (if eq_vec (next_prefix) (((Ox"F0")  : mword 8)) return M ((Z * decodedPrefixes)) then
-      let reset_decoded_prefixes := reset_prefixes_not_at_end (decoded_prefixes) in
-      let new_decoded_prefixes := reset_decoded_prefixes <|decodedPrefixes_lock := true|> in
-      (decode_prefix_inner (instruction_ptr) ((Z.add (read_offset) (1))) (new_decoded_prefixes)
-         (next_prefix))
-       : M ((Z * decodedPrefixes))
-    else if eq_vec (next_prefix) (((Ox"66")  : mword 8)) return M ((Z * decodedPrefixes)) then
-      let reset_decoded_prefixes := reset_prefixes_not_at_end (decoded_prefixes) in
-      let new_decoded_prefixes :=
-        reset_decoded_prefixes
-        <|decodedPrefixes_op_size_override := true|>
-        <|decodedPrefixes_mandatory_prefix_66H := true|> in
-      (decode_prefix_inner (instruction_ptr) ((Z.add (read_offset) (1))) (new_decoded_prefixes)
-         (next_prefix))
-       : M ((Z * decodedPrefixes))
-    else if eq_vec ((subrange_vec_dec (next_prefix) (7) (4))) (((Ox"4")  : mword 4))
-      return
-      M ((Z * decodedPrefixes)) then
-      let reset_decoded_prefixes :=
-        if eq_vec (prev_prefix) (((Ox"66")  : mword 8)) then decoded_prefixes
-        else reset_prefixes_not_at_end (decoded_prefixes) in
-      let rex_contents : REX_typ := next_prefix in
-      let new_decoded_prefixes := reset_decoded_prefixes <|decodedPrefixes_REX := rex_contents|> in
-      (decode_prefix_inner (instruction_ptr) ((Z.add (read_offset) (1))) (new_decoded_prefixes)
-         (next_prefix))
-       : M ((Z * decodedPrefixes))
-    else returnM ((read_offset, decoded_prefixes)))
+   (_rec_decode_prefix_inner (_arg0) (_arg1) (_arg2) (_arg3) (max_iters) ((max_iters  : Z))
+      (Zwf_guarded _))
     : M ((Z * decodedPrefixes)).
 
 Definition decode_prefix (instruction_ptr : mword 64) (decoded_prefixes : decodedPrefixes)
 : M ((Z * decodedPrefixes)) :=
-   decode_prefix_inner (instruction_ptr) (0) (decoded_prefixes) (((Ox"00")  : mword 8)).
+   decode_prefix_inner (instruction_ptr) (0) (decoded_prefixes) (((Ox"00")  : mword 8)) (15).
 
 Definition get_mod_rm_byte_REG (mod_rm_byte : mword 8) (REX : mword 8) : Z :=
    let base_reg_loc := uint ((_get_modRMByte_REG (mod_rm_byte))) in
@@ -802,7 +823,7 @@ Definition read_imm_operand (instruction_ptr : mword 64) (read_offset : Z) (oper
 (*member_Z_list operand_size [8; 16; 32; 64]*)
 : M ((Z * imm)) :=
    let operand_size_bytes := Z.quot (operand_size) (8) in
-   assert_exp' (Z.eqb (operand_size) ((Z.mul (8) (operand_size_bytes)))) "decode.sail:219.49-219.50" >>= fun _ =>
+   assert_exp' (Z.eqb (operand_size) ((Z.mul (8) (operand_size_bytes)))) "decode.sail:226.49-226.50" >>= fun _ =>
    (read_memory (operand_size_bytes) ((add_vec_int (instruction_ptr) (read_offset)))
       ((create_iFetchAccessDescriptor (tt)))) >>= fun imm_value =>
    let l__0 := operand_size in

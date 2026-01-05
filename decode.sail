@@ -83,49 +83,56 @@ function reset_prefixes_not_at_end(decoded_prefixes) = {
 }
 
 // function to decode prefixes
-val decode_prefix_inner: (bits(64), int, decodedPrefixes, bits(8)) -> (int, decodedPrefixes)
-function decode_prefix_inner(instruction_ptr, read_offset, decoded_prefixes, prev_prefix) = {
-    // read next potential prefix
-    let next_prefix: bits(8) = read_memory(1, instruction_ptr + read_offset, create_iFetchAccessDescriptor());
-
-    // if we have a lock prefix
-    if next_prefix == 0xF0 then {
-        // (reset placement-dependent prefixes)
-        let reset_decoded_prefixes = reset_prefixes_not_at_end(decoded_prefixes) in
-        // set lock to true
-        let new_decoded_prefixes = {reset_decoded_prefixes with lock = true} in
-        // check for more prefixes
-            decode_prefix_inner(instruction_ptr, read_offset + 1, new_decoded_prefixes, next_prefix)
-    }
-    // if we have a operand size override (to 16 bits) / potential mandatory prefix, 
-    else if next_prefix == 0x66 then {
-        // (reset placement-dependent prefixes)
-        let reset_decoded_prefixes = reset_prefixes_not_at_end(decoded_prefixes) in
-        // set the corresponding fields to true
-        let new_decoded_prefixes = {reset_decoded_prefixes with op_size_override = true, mandatory_prefix_66H = true} in
-        // check for more prefixes
-            decode_prefix_inner(instruction_ptr, read_offset + 1, new_decoded_prefixes, next_prefix)
-    }
-    // if we have a REX prefix
-    else if next_prefix[7 .. 4] == 0x4 then {
-        // (reset placement-dependent prefixes if necessary)
-        let reset_decoded_prefixes = (if prev_prefix == 0x66 then decoded_prefixes else reset_prefixes_not_at_end(decoded_prefixes)) in
-        // set the REX field according to the prefix's value
-        let rex_contents: REX = struct{bits = next_prefix} in
-        let new_decoded_prefixes = {reset_decoded_prefixes with REX = rex_contents} in
-        // check for more prefixes
-            decode_prefix_inner(instruction_ptr, read_offset + 1, new_decoded_prefixes, next_prefix)
-    }
-    else {
-        // return the result of decoding all the prefixes, as there are no more potential prefixes to check
+val decode_prefix_inner: (bits(64), int, decodedPrefixes, bits(8), int) -> (int, decodedPrefixes)
+function decode_prefix_inner(instruction_ptr, read_offset, decoded_prefixes, prev_prefix, max_iters) = {
+    if max_iters == 0 then
+        // either all prefixes have been read, or max number of possible prefixes has been exceeded
         (read_offset, decoded_prefixes)
+    else {
+        // read next potential prefix
+        let next_prefix: bits(8) = read_memory(1, instruction_ptr + read_offset, create_iFetchAccessDescriptor());
+
+        // if we have a lock prefix
+        if next_prefix == 0xF0 then {
+            // (reset placement-dependent prefixes)
+            let reset_decoded_prefixes = reset_prefixes_not_at_end(decoded_prefixes) in
+            // set lock to true
+            let new_decoded_prefixes = {reset_decoded_prefixes with lock = true} in
+            // check for more prefixes
+                decode_prefix_inner(instruction_ptr, read_offset + 1, new_decoded_prefixes, next_prefix, max_iters - 1)
+        }
+        // if we have a operand size override (to 16 bits) / potential mandatory prefix, 
+        else if next_prefix == 0x66 then {
+            // (reset placement-dependent prefixes)
+            let reset_decoded_prefixes = reset_prefixes_not_at_end(decoded_prefixes) in
+            // set the corresponding fields to true
+            let new_decoded_prefixes = {reset_decoded_prefixes with op_size_override = true, mandatory_prefix_66H = true} in
+            // check for more prefixes
+                decode_prefix_inner(instruction_ptr, read_offset + 1, new_decoded_prefixes, next_prefix, max_iters - 1)
+        }
+        // if we have a REX prefix
+        else if next_prefix[7 .. 4] == 0x4 then {
+            // (reset placement-dependent prefixes if necessary)
+            let reset_decoded_prefixes = (if prev_prefix == 0x66 then decoded_prefixes else reset_prefixes_not_at_end(decoded_prefixes)) in
+            // set the REX field according to the prefix's value
+            let rex_contents: REX = struct{bits = next_prefix} in
+            let new_decoded_prefixes = {reset_decoded_prefixes with REX = rex_contents} in
+            // check for more prefixes
+                decode_prefix_inner(instruction_ptr, read_offset + 1, new_decoded_prefixes, next_prefix, max_iters - 1)
+        }
+        else
+            // return the result of decoding all the prefixes, as there are no more potential prefixes to check
+            decode_prefix_inner(instruction_ptr, read_offset, decoded_prefixes, prev_prefix, 0)
     }
 }
+
+// Tells rocq that max_iters bounds the number of times that decode_prefix_inner is called
+termination_measure decode_prefix_inner(_,_,_,_,max_iters) = max_iters
 
 // wrapper function to decode the prefixes of an instruction
 val decode_prefix: (bits(64), decodedPrefixes) -> (int, decodedPrefixes)
 function decode_prefix(instruction_ptr, decoded_prefixes) = {
-    let (read_offset, decoded_prefixes) = decode_prefix_inner(instruction_ptr, 0, decoded_prefixes, 0x00);
+    let (read_offset, decoded_prefixes) = decode_prefix_inner(instruction_ptr, 0, decoded_prefixes, 0x00, 15);
     (read_offset, decoded_prefixes)
 }
 

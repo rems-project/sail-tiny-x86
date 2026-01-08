@@ -18,13 +18,14 @@ rocq-snapshot:
 type-check:
 	sail $(SAIL_OPTS) --just-check $(MODEL_WITH_TEST)
 
-test: test.o
-	./test.o;
+test: testing/test.o
+	testing/test.o;
 
-test.o: test.c
-	gcc test.c $(SAIL_DIR)/lib/*.c -lgmp -lz -I $(SAIL_DIR)/lib/ -o test.o;
+testing/test.o: testing/test.c
+	gcc testing/test.c $(SAIL_DIR)/lib/*.c -lgmp -lz -I $(SAIL_DIR)/lib/ -o testing/test.o;
 
-test.c: $(MODEL_WITH_TEST)
-	sail -c $(MODEL_WITH_TEST) -o test;
+testing/test.c: $(MODEL_WITH_TEST)
+	mkdir -p testing && \
+	sail -c $(MODEL_WITH_TEST) -o testing/test;
 
 .PHONY: default rocq rocq-snapshot type-check test

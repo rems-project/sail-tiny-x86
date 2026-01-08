@@ -124,7 +124,8 @@ Definition reverse_endianness {n : Z} (xs : mword n) (*member_Z_list n [8; 16; 3
 
 Definition mod' (x : Z) (y : Z) : Z := Z.rem (x) (y).
 
-Definition fail (message : string) : M (unit) := assert_exp' false message >>= fun _ => exit tt.
+Definition fail {a : Type} (message : string) : M (a) :=
+   assert_exp' false message >>= fun _ => exit tt.
 
 Definition flip_bit (bit_to_flip : bitU) : bitU := if eq_bit (bit_to_flip) (B0) then B1 else B0.
 
@@ -227,9 +228,8 @@ Definition read_GPR (operand_size : Z) (reg : reg) (*member_Z_list operand_size 
       returnM ((autocast (T := mword) (subrange_vec_dec (reg) ((Z.sub (operand_size) (1))) (0))))
    | REG_HIGH_BYTE i =>
       assert_exp' (Z.eqb (operand_size) (8)) "Register is high byte enabled but operand size is not 8 bits" >>= fun _ =>
-      (reg_deref ((vec_access_dec (GPRs) ((Z.sub (i) (4)))))) >>= fun reg =>
-      (reg_deref ((vec_access_dec (GPRs) ((Z.sub (i) (4)))))) >>= fun (w__0 : mword 64) =>
-      returnM ((autocast (T := mword) (subrange_vec_dec (w__0) (15) (8))))
+      (reg_deref ((vec_access_dec (GPRs) (i)))) >>= fun reg =>
+      returnM ((autocast (T := mword) (subrange_vec_dec (reg) (15) (8))))
    end
     : M (mword operand_size).
 
@@ -259,9 +259,9 @@ Definition write_GPR (operand_size : Z) (reg : reg) (value : mword operand_size)
        : M (unit)
    | REG_HIGH_BYTE i =>
       assert_exp' (Z.eqb (operand_size) (8)) "Register is high byte enabled but operand size is not 8 bits" >>= fun _ =>
-      (reg_deref ((vec_access_dec (GPRs) ((Z.sub (i) (4)))))) >>= fun (w__3 : mword 64) =>
+      (reg_deref ((vec_access_dec (GPRs) (i)))) >>= fun (w__3 : mword 64) =>
       write_reg_ref
-        (vec_access_dec (GPRs) ((Z.sub (i) (4))))
+        (vec_access_dec (GPRs) (i))
         (update_subrange_vec_dec (w__3) (15) (8) ((autocast (T := mword)  value)))
        : M (unit)
    end
@@ -823,7 +823,7 @@ Definition read_imm_operand (instruction_ptr : mword 64) (read_offset : Z) (oper
 (*member_Z_list operand_size [8; 16; 32; 64]*)
 : M ((Z * imm)) :=
    let operand_size_bytes := Z.quot (operand_size) (8) in
-   assert_exp' (Z.eqb (operand_size) ((Z.mul (8) (operand_size_bytes)))) "decode.sail:226.49-226.50" >>= fun _ =>
+   assert_exp' (Z.eqb (operand_size) ((Z.mul (8) (operand_size_bytes)))) "decode.sail:220.49-220.50" >>= fun _ =>
    (read_memory (operand_size_bytes) ((add_vec_int (instruction_ptr) (read_offset)))
       ((create_iFetchAccessDescriptor (tt)))) >>= fun imm_value =>
    let l__0 := operand_size in
@@ -840,7 +840,7 @@ Definition wrap_reg (reg_index : Z) (operand_size : Z) (REX : mword 8)
    if andb ((Z.eqb (operand_size) (8)))
         ((andb ((eq_vec (REX) (((Ox"00")  : mword 8))))
             ((andb ((Z.geb (reg_index) (4))) ((Z.leb (reg_index) (7))))))) then
-     REG_HIGH_BYTE (reg_index)
+     REG_HIGH_BYTE ((Z.sub (reg_index) (4)))
    else REG_NORMAL (reg_index).
 
 Definition decode_rm_operand_inner
@@ -964,19 +964,31 @@ Definition get_Eb_Ib_operands
    (read_imm_operand (instruction_ptr) (read_offset) (8)) >>= fun '((read_offset, imm)) =>
    returnM ((read_offset, operand1, imm)).
 
+Definition fail_if_lock (lock : bool) (operation : string) : M (unit) :=
+   let error_message :=
+     String.append ("Exception #UD — Invalid Opcode (Undefined Opcode): ")
+       ((String.append (operation) (" instruction does not support the LOCK prefix"))) in
+   (if lock return M (unit) then (fail (error_message))  : M (unit)
+    else returnM (tt))
+    : M (unit).
+
 Definition decode_one_byte_instruction
 (b__0 : mword 8) (instruction_ptr : mword 64) (read_offset : Z) (decoded_prefixes : decodedPrefixes)
 : M (option ((Z * ast))) :=
    (if eq_vec (b__0) (((Ox"88")  : mword 8)) return M (option ((Z * ast))) then
+      (fail_if_lock (decoded_prefixes.(decodedPrefixes_lock)) ("MOV")) >>
       (get_Eb_Gb_operands (instruction_ptr) (read_offset) (decoded_prefixes.(decodedPrefixes_REX))) >>= fun '((new_read_offset, operand1, operand2)) =>
       returnM ((Some ((new_read_offset, MOV ((8, operand1, operand2))))))
     else if eq_vec (b__0) (((Ox"89")  : mword 8)) return M (option ((Z * ast))) then
+      (fail_if_lock (decoded_prefixes.(decodedPrefixes_lock)) ("MOV")) >>
       (get_Ev_Gv_operands (instruction_ptr) (read_offset) (decoded_prefixes)) >>= fun '((new_read_offset, operand_size, operand1, operand2)) =>
       returnM ((Some ((new_read_offset, MOV ((operand_size, operand1, operand2))))))
     else if eq_vec (b__0) (((Ox"8A")  : mword 8)) return M (option ((Z * ast))) then
+      (fail_if_lock (decoded_prefixes.(decodedPrefixes_lock)) ("MOV")) >>
       (get_Gb_Eb_operands (instruction_ptr) (read_offset) (decoded_prefixes.(decodedPrefixes_REX))) >>= fun '((new_read_offset, operand1, operand2)) =>
       returnM ((Some ((new_read_offset, MOV ((8, operand1, operand2))))))
     else if eq_vec (b__0) (((Ox"8B")  : mword 8)) return M (option ((Z * ast))) then
+      (fail_if_lock (decoded_prefixes.(decodedPrefixes_lock)) ("MOV")) >>
       (get_Gv_Ev_operands (instruction_ptr) (read_offset) (decoded_prefixes)) >>= fun '((new_read_offset, operand_size, operand1, operand2)) =>
       returnM ((Some ((new_read_offset, MOV ((operand_size, operand1, operand2))))))
     else if eq_vec ((subrange_vec_dec (b__0) (7) (4))) (((Ox"B")  : mword 4))
@@ -984,6 +996,7 @@ Definition decode_one_byte_instruction
       M (option ((Z * ast))) then
       let reg_field := subrange_vec_dec (b__0) (2) (0) in
       let not_8_bit : bits 1 := subrange_vec_dec (b__0) (3) (3) in
+      (fail_if_lock (decoded_prefixes.(decodedPrefixes_lock)) ("MOV")) >>
       let reg_index :=
         get_reg_value_in_opcode_byte (reg_field) (decoded_prefixes.(decodedPrefixes_REX)) in
       let reg :=
@@ -1004,6 +1017,7 @@ Definition decode_one_byte_instruction
          (fail ("The instruction to be decoded is either reserved or not implemented in this model"))
           : M (unit)
        else returnM (tt)) >>
+      (fail_if_lock (decoded_prefixes.(decodedPrefixes_lock)) ("MOV")) >>
       (if eq_vec (not_8_bit) ((('b"1")  : mword 1)) return M ((Z * Z * rm_operand * imm)) then
          (get_Ev_Iz_operands (instruction_ptr) (read_offset) (decoded_prefixes) (mod_rm_byte))
           : M ((Z * Z * rm_operand * imm))
@@ -1060,27 +1074,35 @@ Definition decode_one_byte_instruction
                      ((new_read_offset, XOR
                                           ((decoded_prefixes.(decodedPrefixes_lock), operand_size, operand1, rmi_IMM
                                                                                                                (imm)))))))
-       else if Z.eqb (l__0) (7) then
+       else if Z.eqb (l__0) (7) return M (option ((Z * ast))) then
+         (fail_if_lock (decoded_prefixes.(decodedPrefixes_lock)) ("CMP")) >>
          returnM ((Some ((new_read_offset, CMP ((operand_size, operand1, rmi_IMM (imm)))))))
        else
-         (fail ("The instruction to be decoded is not implemented in this model")) >> returnM (None))
+         (fail ("The instruction to be decoded is not implemented in this model"))
+          : M (option ((Z * ast))))
        : M (option ((Z * ast)))
     else if eq_vec (b__0) (((Ox"38")  : mword 8)) return M (option ((Z * ast))) then
+      (fail_if_lock (decoded_prefixes.(decodedPrefixes_lock)) ("CMP")) >>
       (get_Eb_Gb_operands (instruction_ptr) (read_offset) (decoded_prefixes.(decodedPrefixes_REX))) >>= fun '((new_read_offset, operand1, operand2)) =>
       returnM ((Some ((new_read_offset, CMP ((8, operand1, operand2))))))
     else if eq_vec (b__0) (((Ox"39")  : mword 8)) return M (option ((Z * ast))) then
+      (fail_if_lock (decoded_prefixes.(decodedPrefixes_lock)) ("CMP")) >>
       (get_Ev_Gv_operands (instruction_ptr) (read_offset) (decoded_prefixes)) >>= fun '((new_read_offset, operand_size, operand1, operand2)) =>
       returnM ((Some ((new_read_offset, CMP ((operand_size, operand1, operand2))))))
     else if eq_vec (b__0) (((Ox"3A")  : mword 8)) return M (option ((Z * ast))) then
+      (fail_if_lock (decoded_prefixes.(decodedPrefixes_lock)) ("CMP")) >>
       (get_Gb_Eb_operands (instruction_ptr) (read_offset) (decoded_prefixes.(decodedPrefixes_REX))) >>= fun '((new_read_offset, operand1, operand2)) =>
       returnM ((Some ((new_read_offset, CMP ((8, operand1, operand2))))))
     else if eq_vec (b__0) (((Ox"3B")  : mword 8)) return M (option ((Z * ast))) then
+      (fail_if_lock (decoded_prefixes.(decodedPrefixes_lock)) ("CMP")) >>
       (get_Gv_Ev_operands (instruction_ptr) (read_offset) (decoded_prefixes)) >>= fun '((new_read_offset, operand_size, operand1, operand2)) =>
       returnM ((Some ((new_read_offset, CMP ((operand_size, operand1, operand2))))))
     else if eq_vec (b__0) (((Ox"6A")  : mword 8)) return M (option ((Z * ast))) then
+      (fail_if_lock (decoded_prefixes.(decodedPrefixes_lock)) ("PUSH")) >>
       (read_imm_operand (instruction_ptr) (read_offset) (8)) >>= fun '((new_read_offset, imm)) =>
       returnM ((Some ((new_read_offset, PUSH ((8, rmi_IMM (imm)))))))
     else if eq_vec (b__0) (((Ox"68")  : mword 8)) return M (option ((Z * ast))) then
+      (fail_if_lock (decoded_prefixes.(decodedPrefixes_lock)) ("PUSH")) >>
       let operand_size := get_operand_size_ignoring_REX (decoded_prefixes) (32) in
       (read_imm_operand (instruction_ptr) (read_offset) (operand_size)) >>= fun '((new_read_offset, imm)) =>
       returnM ((Some ((new_read_offset, PUSH ((operand_size, rmi_IMM (imm)))))))
@@ -1090,6 +1112,7 @@ Definition decode_one_byte_instruction
          (fail ("The instruction to be decoded is either reserved or not implemented in this model"))
           : M (unit)
        else returnM (tt)) >>
+      (fail_if_lock (decoded_prefixes.(decodedPrefixes_lock)) ("PUSH")) >>
       (decode_push_or_pop_rm_operand (instruction_ptr) (new_read_offset) (decoded_prefixes)
          (mod_rm_byte)) >>= fun '((final_read_offset, operand_size, working_operand)) =>
       let operand : rmi_operand :=
@@ -1098,17 +1121,24 @@ Definition decode_one_byte_instruction
         | rm_MEM contents => rmi_MEM (contents)
         end in
       returnM ((Some ((final_read_offset, PUSH ((operand_size, operand))))))
-    else if eq_vec ((subrange_vec_dec (b__0) (7) (4))) (((Ox"5")  : mword 4)) then
+    else if eq_vec ((subrange_vec_dec (b__0) (7) (4))) (((Ox"5")  : mword 4))
+      return
+      M (option ((Z * ast))) then
       let reg_field : bits 3 := subrange_vec_dec (b__0) (2) (0) in
       let is_pop : bits 1 := subrange_vec_dec (b__0) (3) (3) in
       let reg_index :=
         get_reg_value_in_opcode_byte (reg_field) (decoded_prefixes.(decodedPrefixes_REX)) in
       let reg := REG_NORMAL (reg_index) in
       let operand_size := get_operand_size_ignoring_REX (decoded_prefixes) (64) in
-      returnM ((if eq_vec (is_pop) ((('b"0")  : mword 1)) then
-                  Some ((read_offset, PUSH ((operand_size, rmi_REG (reg)))))
-                else Some ((read_offset, POP ((operand_size, rm_REG (reg)))))))
+      (if eq_vec (is_pop) ((('b"0")  : mword 1)) return M (option ((Z * ast))) then
+         (fail_if_lock (decoded_prefixes.(decodedPrefixes_lock)) ("PUSH")) >>
+         returnM ((Some ((read_offset, PUSH ((operand_size, rmi_REG (reg)))))))
+       else
+         (fail_if_lock (decoded_prefixes.(decodedPrefixes_lock)) ("POP")) >>
+         returnM ((Some ((read_offset, POP ((operand_size, rm_REG (reg))))))))
+       : M (option ((Z * ast)))
     else if eq_vec (b__0) (((Ox"8F")  : mword 8)) return M (option ((Z * ast))) then
+      (fail_if_lock (decoded_prefixes.(decodedPrefixes_lock)) ("POP")) >>
       (read_mod_rm_byte (instruction_ptr) (read_offset)) >>= fun '((new_read_offset, mod_rm_byte)) =>
       (if neq_int ((uint ((_get_modRMByte_REG (mod_rm_byte))))) (0) return M (unit) then
          (fail ("The instruction to be decoded is reserved"))
@@ -1158,6 +1188,7 @@ Definition decode_one_byte_instruction
                   ((new_read_offset, SUB
                                        ((decoded_prefixes.(decodedPrefixes_lock), operand_size, operand1, operand2))))))
     else if eq_vec (b__0) (((Ox"E8")  : mword 8)) return M (option ((Z * ast))) then
+      (fail_if_lock (decoded_prefixes.(decodedPrefixes_lock)) ("CALL")) >>
       (if decoded_prefixes.(decodedPrefixes_op_size_override) return M (unit) then
          (fail ("CALL rel16 is not supported in 64-bit mode"))
           : M (unit)
@@ -1167,16 +1198,21 @@ Definition decode_one_byte_instruction
       let new_read_offset := Z.add (read_offset) (4) in
       returnM ((Some ((new_read_offset, CALL (operand)))))
     else if eq_vec (b__0) (((Ox"C9")  : mword 8)) return M (option ((Z * ast))) then
+      (fail_if_lock (decoded_prefixes.(decodedPrefixes_lock)) ("LEAVE")) >>
       let operand_size := get_operand_size_ignoring_REX (decoded_prefixes) (64) in
-      assert_exp' (orb ((Z.eqb (operand_size) (16))) ((Z.eqb (operand_size) (64)))) "tiny-x86.sail:644.50-644.51" >>= fun _ =>
+      assert_exp' (orb ((Z.eqb (operand_size) (16))) ((Z.eqb (operand_size) (64)))) "tiny-x86.sail:757.50-757.51" >>= fun _ =>
       returnM ((Some ((read_offset, LEAVE (operand_size)))))
-    else if eq_vec (b__0) (((Ox"C3")  : mword 8)) then returnM ((Some ((read_offset, RET (tt)))))
+    else if eq_vec (b__0) (((Ox"C3")  : mword 8)) return M (option ((Z * ast))) then
+      (fail_if_lock (decoded_prefixes.(decodedPrefixes_lock)) ("RET")) >>
+      returnM ((Some ((read_offset, RET (tt)))))
     else if eq_vec (b__0) (((Ox"EB")  : mword 8)) return M (option ((Z * ast))) then
+      (fail_if_lock (decoded_prefixes.(decodedPrefixes_lock)) ("JMP")) >>
       (read_memory (1) ((add_vec_int (instruction_ptr) (read_offset)))
          ((create_iFetchAccessDescriptor (tt)))) >>= fun operand =>
       let new_read_offset := Z.add (read_offset) (1) in
       returnM ((Some ((new_read_offset, JMP (operand)))))
     else if eq_vec (b__0) (((Ox"79")  : mword 8)) return M (option ((Z * ast))) then
+      (fail_if_lock (decoded_prefixes.(decodedPrefixes_lock)) ("JNS")) >>
       (read_memory (1) ((add_vec_int (instruction_ptr) (read_offset)))
          ((create_iFetchAccessDescriptor (tt)))) >>= fun operand =>
       let new_read_offset := Z.add (read_offset) (1) in
@@ -1189,43 +1225,53 @@ Definition decode_two_byte_instruction
 (decoded_prefixes : decodedPrefixes)
 : M (option ((Z * ast))) :=
    (if eq_vec (b__0) (((Ox"0FAE")  : mword 16)) return M (option ((Z * ast))) then
+      (fail_if_lock (decoded_prefixes.(decodedPrefixes_lock)) ("FENCE")) >>
       (read_mod_rm_byte (instruction_ptr) (read_offset)) >>= fun '((new_read_offset, mod_rm_byte)) =>
       (if eq_vec ((_get_modRMByte_Mod (mod_rm_byte))) ((('b"11")  : mword 2))
          return
          M (option ((Z * ast))) then
          let b__1 := _get_modRMByte_REG (mod_rm_byte) in
          (if eq_vec (b__1) ((('b"111")  : mword 3)) return M (option ((Z * ast))) then
-            (if decoded_prefixes.(decodedPrefixes_op_size_override) return M (unit) then
+            (if decoded_prefixes.(decodedPrefixes_op_size_override)
+               return
+               M (option ((Z * ast))) then
                (fail ("Prefix 66H is not allowed in the SFENCE instruction"))
-                : M (unit)
-             else returnM (tt)) >>
-            returnM ((Some ((new_read_offset, SFENCE (tt)))))
+                : M (option ((Z * ast)))
+             else returnM ((Some ((new_read_offset, SFENCE (tt))))))
+             : M (option ((Z * ast)))
           else if eq_vec (b__1) ((('b"101")  : mword 3)) return M (option ((Z * ast))) then
-            (if decoded_prefixes.(decodedPrefixes_op_size_override) return M (unit) then
+            (if decoded_prefixes.(decodedPrefixes_op_size_override)
+               return
+               M (option ((Z * ast))) then
                (fail ("Prefix 66H is not allowed in the LFENCE instruction"))
-                : M (unit)
-             else returnM (tt)) >>
-            returnM ((Some ((new_read_offset, LFENCE (tt)))))
+                : M (option ((Z * ast)))
+             else returnM ((Some ((new_read_offset, LFENCE (tt))))))
+             : M (option ((Z * ast)))
           else if eq_vec (b__1) ((('b"110")  : mword 3)) return M (option ((Z * ast))) then
-            (if decoded_prefixes.(decodedPrefixes_op_size_override) return M (unit) then
+            (if decoded_prefixes.(decodedPrefixes_op_size_override)
+               return
+               M (option ((Z * ast))) then
                (fail ("Prefix 66H is not allowed in the MFENCE instruction"))
-                : M (unit)
-             else returnM (tt)) >>
-            returnM ((Some ((new_read_offset, MFENCE (tt)))))
+                : M (option ((Z * ast)))
+             else returnM ((Some ((new_read_offset, MFENCE (tt))))))
+             : M (option ((Z * ast)))
           else
-            (fail ("This instruction decode is either reserved or not implemented in this model")) >>
-            returnM (None))
+            (fail ("This instruction decode is either reserved or not implemented in this model"))
+             : M (option ((Z * ast))))
           : M (option ((Z * ast)))
-       else (fail ("This instruction decode is not implemented in this model")) >> returnM (None))
+       else
+         (fail ("This instruction decode is not implemented in this model"))
+          : M (option ((Z * ast))))
        : M (option ((Z * ast)))
     else if eq_vec (b__0) (((Ox"0FAF")  : mword 16)) return M (option ((Z * ast))) then
+      (fail_if_lock (decoded_prefixes.(decodedPrefixes_lock)) ("IMUL")) >>
       (get_Gv_Ev_operands (instruction_ptr) (read_offset) (decoded_prefixes)) >>= fun '((new_read_offset, operand_size, rm_operand1, rmi_operand2)) =>
       match (rm_operand1, rmi_operand2) with
       | (rm_REG (REG_NORMAL reg_index_1), rmi_REG reg_2) =>
          returnM ((Some ((new_read_offset, IMUL ((operand_size, reg_index_1, rm_REG (reg_2)))))))
       | (rm_REG (REG_NORMAL reg_index), rmi_MEM mem_loc) =>
          returnM ((Some ((new_read_offset, IMUL ((operand_size, reg_index, rm_MEM (mem_loc)))))))
-      | _ => (fail ("Invalid decoding for IMUL r r/m instruction")) >> returnM (None)
+      | _ => (fail ("Invalid decoding for IMUL r r/m instruction"))  : M (option ((Z * ast)))
       end
        : M (option ((Z * ast)))
     else returnM (None))
@@ -1265,23 +1311,11 @@ Definition decode (instruction_ptr : mword 64) : M (option ((mword 64 * ast))) :
    match res with
    | None => returnM (None)
    | Some (offset, instruction) =>
-      (if Z.gtb (offset) (15) return M (unit) then
+      (if Z.gtb (offset) (15) return M (option ((mword 64 * ast))) then
          (fail ("Instruction is longer than 15 bytes, hence is not valid"))
-          : M (unit)
-       else returnM (tt)) >>
-      match instruction with
-      | XOR g__6 => returnM (tt)
-      | ADD g__7 => returnM (tt)
-      | SUB g__8 => returnM (tt)
-      | g__9 =>
-         (if decoded_prefixes.(decodedPrefixes_lock) return M (unit) then
-            (fail
-               ("Exception #UD — Invalid Opcode (Undefined Opcode): instruction does not support the LOCK prefix"))
-             : M (unit)
-          else returnM (tt))
-          : M (unit)
-      end >>
-      returnM ((Some ((add_vec_int (instruction_ptr) (offset), instruction))))
+          : M (option ((mword 64 * ast)))
+       else returnM ((Some ((add_vec_int (instruction_ptr) (offset), instruction)))))
+       : M (option ((mword 64 * ast)))
    end
     : M (option ((mword 64 * ast))).
 

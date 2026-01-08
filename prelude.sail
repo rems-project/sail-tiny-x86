@@ -16,8 +16,11 @@ overload operator / = {tdiv_int}
 val mod: (int, int) -> int
 function mod(x, y) = tmod_int(x, y)
 
-val fail: string -> unit
-function fail(message) = assert(false, message)
+val fail: forall 'a. string -> 'a
+function fail(message) = {
+    assert(false, message);
+    exit()
+}
 
 val flip_bit: bit -> bit
 function flip_bit(bit_to_flip) = {

@@ -7,6 +7,17 @@ function fail_if_two_mem_operands(dest, src, operation) = {
     }
 }
 
+val fail_if_lock : (bool, string) -> unit
+function fail_if_lock(lock, operation) = {
+    let error_message = concat_str(
+        "Exception #UD — Invalid Opcode (Undefined Opcode): ",
+        concat_str(operation, " instruction does not support the LOCK prefix")
+    );
+    if lock then 
+        fail(error_message)
+    else ()
+}
+
 /* MOV */
 
 function clause execute(MOV(operand_size, dest, src)) = {
@@ -25,6 +36,8 @@ function clause execute(MOV(operand_size, dest, src)) = {
 
 // Decode MOV r/m8 r8
 function clause decode_one_byte_instruction(0x88, instruction_ptr, read_offset, decoded_prefixes) = {
+    // MOV does not support the lock prefix
+    fail_if_lock(decoded_prefixes.lock, "MOV");
     // get 2 operands of the addressing method + operand type: Operand 1 = Eb, Operand 2 = Gb
     let (new_read_offset, operand1, operand2) = get_Eb_Gb_operands(instruction_ptr, read_offset, decoded_prefixes.REX);
     // return new read offset and decoded instruction
@@ -33,6 +46,8 @@ function clause decode_one_byte_instruction(0x88, instruction_ptr, read_offset, 
 
 // Decode MOV r/m{16, 32, 64}, r{16, 32, 64}
 function clause decode_one_byte_instruction(0x89, instruction_ptr, read_offset, decoded_prefixes) = {
+    // MOV does not support the lock prefix
+    fail_if_lock(decoded_prefixes.lock, "MOV");
     // get 2 operands of the addressing method + operand type: Operand 1 = Ev, Operand 2 = Gv
     let (new_read_offset, operand_size, operand1, operand2) = get_Ev_Gv_operands(instruction_ptr, read_offset, decoded_prefixes);
     // return new read offset and decoded instruction
@@ -41,6 +56,8 @@ function clause decode_one_byte_instruction(0x89, instruction_ptr, read_offset, 
 
 // Decode MOV r8, r/m8
 function clause decode_one_byte_instruction(0x8A, instruction_ptr, read_offset, decoded_prefixes) = {
+    // MOV does not support the lock prefix
+    fail_if_lock(decoded_prefixes.lock, "MOV");
     // get 2 operands of the addressing method + operand type: Operand 1 = Gb, Operand 2 = Eb
     let (new_read_offset, operand1, operand2) = get_Gb_Eb_operands(instruction_ptr, read_offset, decoded_prefixes.REX);
     // return new read offset and decoded instruction
@@ -49,6 +66,8 @@ function clause decode_one_byte_instruction(0x8A, instruction_ptr, read_offset, 
 
 // Decode MOV r{16, 32, 64}, r/m{16, 32, 64}
 function clause decode_one_byte_instruction(0x8B, instruction_ptr, read_offset, decoded_prefixes) = {
+    // MOV does not support the lock prefix
+    fail_if_lock(decoded_prefixes.lock, "MOV");
     // get 2 operands of the addressing method + operand type: Operand 1 = Gv, Operand 2 = Ev
     let (new_read_offset, operand_size, operand1, operand2) = get_Gv_Ev_operands(instruction_ptr, read_offset, decoded_prefixes);
     // return new read offset and decoded instruction
@@ -57,6 +76,8 @@ function clause decode_one_byte_instruction(0x8B, instruction_ptr, read_offset, 
 
 // Decode MOV r{8, 16, 32, 64} imm{8, 16, 32, 64}
 function clause decode_one_byte_instruction(0xB @ not_8_bit: bits(1) @ reg_field, instruction_ptr, read_offset, decoded_prefixes) = {
+    // MOV does not support the lock prefix
+    fail_if_lock(decoded_prefixes.lock, "MOV");
     // get register location embedded in the opcode
     let reg_index = get_reg_value_in_opcode_byte(reg_field, decoded_prefixes.REX);
     let reg = 
@@ -87,6 +108,9 @@ function clause decode_one_byte_instruction(0b1100_110 @ not_8_bit, instruction_
 
     // If the opcode extension does not point to a MOV instruction then fail
     if unsigned(mod_rm_byte[REG]) != 0 then fail("The instruction to be decoded is either reserved or not implemented in this model");
+
+    // MOV does not support the lock prefix
+    fail_if_lock(decoded_prefixes.lock, "MOV");
 
     // Get operands
     let (new_read_offset, operand_size, operand1, imm) = {
@@ -194,10 +218,13 @@ function clause decode_one_byte_instruction(0b1000_000 @ not_8_bit, instruction_
         0 => Some(new_read_offset, ADD(decoded_prefixes.lock, operand_size, operand1, rmi_IMM(imm))),
         5 => Some(new_read_offset, SUB(decoded_prefixes.lock, operand_size, operand1, rmi_IMM(imm))),
         6 => Some(new_read_offset, XOR(decoded_prefixes.lock, operand_size, operand1, rmi_IMM(imm))),
-        7 => Some(new_read_offset, CMP(operand_size, operand1, rmi_IMM(imm))),
+        7 => {
+            // CMP does not support the lock prefix
+            fail_if_lock(decoded_prefixes.lock, "CMP");
+            Some(new_read_offset, CMP(operand_size, operand1, rmi_IMM(imm)))
+        },
         _ => {
-            fail("The instruction to be decoded is not implemented in this model");
-            None()
+            fail("The instruction to be decoded is not implemented in this model")
         }
     }
 }
@@ -212,6 +239,9 @@ function clause execute(SFENCE()) = {
 
 // Decode SFENCE, LFENCE and MFENCE instructions
 function clause decode_two_byte_instruction(0x0FAE, instruction_ptr, read_offset, decoded_prefixes) = {
+    // FENCEs do not support the lock prefix
+    fail_if_lock(decoded_prefixes.lock, "FENCE");
+
     // get opcode extension (located in mod r/m byte)
     let (new_read_offset, mod_rm_byte) = read_mod_rm_byte(instruction_ptr, read_offset);
 
@@ -220,30 +250,34 @@ function clause decode_two_byte_instruction(0x0FAE, instruction_ptr, read_offset
             0b111 => {
                 // SFENCE
                 // Use of 66 / F2 / F3 prefixes are not allowed in the instruction. Only prefix 66 has been implemented in this model.
-                if decoded_prefixes.op_size_override then fail("Prefix 66H is not allowed in the SFENCE instruction");
-                Some(new_read_offset, SFENCE())
+                if decoded_prefixes.op_size_override then 
+                    fail("Prefix 66H is not allowed in the SFENCE instruction")
+                else
+                    Some(new_read_offset, SFENCE())
             },
             0b101 => {
                 // LFENCE
                 // Use of 66 / F2 / F3 prefixes are not allowed in the instruction. Only prefix 66 has been implemented in this model.
-                if decoded_prefixes.op_size_override then fail("Prefix 66H is not allowed in the LFENCE instruction");
-                Some(new_read_offset, LFENCE())
+                if decoded_prefixes.op_size_override then 
+                    fail("Prefix 66H is not allowed in the LFENCE instruction")
+                else
+                    Some(new_read_offset, LFENCE())
             },
             0b110 => {
                 // MFENCE
                 // Use of 66 / F2 / F3 prefixes are not allowed in the instruction. Only prefix 66 has been implemented in this model.
-                if decoded_prefixes.op_size_override then fail("Prefix 66H is not allowed in the MFENCE instruction");
-                Some(new_read_offset, MFENCE())
+                if decoded_prefixes.op_size_override then 
+                    fail("Prefix 66H is not allowed in the MFENCE instruction")
+                else
+                    Some(new_read_offset, MFENCE())
             },
             _ => {
-                fail("This instruction decode is either reserved or not implemented in this model");
-                None()
+                fail("This instruction decode is either reserved or not implemented in this model")
             }
         }
     }
     else {
-        fail("This instruction decode is not implemented in this model");
-        None()
+        fail("This instruction decode is not implemented in this model")
     }
 }
 
@@ -289,6 +323,9 @@ function clause execute(CMP(operand_size, first, second)) = {
 
 // Decode CMP r/m8, r8
 function clause decode_one_byte_instruction(0x38, instruction_ptr, read_offset, decoded_prefixes) = {
+    // CMP does not support the lock prefix
+    fail_if_lock(decoded_prefixes.lock, "CMP");
+
     // addressing method + operand type: Eb, Gb
     let (new_read_offset, operand1, operand2) = 
         get_Eb_Gb_operands(instruction_ptr, read_offset, decoded_prefixes.REX);
@@ -297,6 +334,9 @@ function clause decode_one_byte_instruction(0x38, instruction_ptr, read_offset, 
 
 // Decode CMP r/m{16, 32, 64}, r{16, 32, 64}
 function clause decode_one_byte_instruction(0x39, instruction_ptr, read_offset, decoded_prefixes) = {
+    // CMP does not support the lock prefix
+    fail_if_lock(decoded_prefixes.lock, "CMP");
+
     // addressing method + operand type: Ev, Gv
     let (new_read_offset, operand_size, operand1, operand2) = 
         get_Ev_Gv_operands(instruction_ptr, read_offset, decoded_prefixes);
@@ -305,6 +345,9 @@ function clause decode_one_byte_instruction(0x39, instruction_ptr, read_offset, 
 
 // Decode CMP r8, r/m8
 function clause decode_one_byte_instruction(0x3A, instruction_ptr, read_offset, decoded_prefixes) = {
+    // CMP does not support the lock prefix
+    fail_if_lock(decoded_prefixes.lock, "CMP");
+
     // addressing method + operand type: Gb, Eb
     let (new_read_offset, operand1, operand2) = 
         get_Gb_Eb_operands(instruction_ptr, read_offset, decoded_prefixes.REX);
@@ -313,6 +356,9 @@ function clause decode_one_byte_instruction(0x3A, instruction_ptr, read_offset, 
 
 // Decode CMP r{16, 32, 64}, r/m{16, 32, 64}
 function clause decode_one_byte_instruction(0x3B, instruction_ptr, read_offset, decoded_prefixes) = {
+    // CMP does not support the lock prefix
+    fail_if_lock(decoded_prefixes.lock, "CMP");
+
     // addressing method + operand type: Gv, Ev
     let (new_read_offset, operand_size, operand1, operand2) = 
         get_Gv_Ev_operands(instruction_ptr, read_offset, decoded_prefixes);
@@ -345,14 +391,22 @@ function clause execute(PUSH(operand_size, src)) = {
 
 // Decode PUSH imm8
 function clause decode_one_byte_instruction(0x6A, instruction_ptr, read_offset, decoded_prefixes) = {
+    // PUSH does not support the lock prefix
+    fail_if_lock(decoded_prefixes.lock, "PUSH");
+
+    // Decode instruction
     let (new_read_offset, imm) = read_imm_operand(instruction_ptr, read_offset, 8);
     Some(new_read_offset, PUSH(8, rmi_IMM(imm)))
 }
 
 // Decode PUSH imm{16, 32}
 function clause decode_one_byte_instruction(0x68, instruction_ptr, read_offset, decoded_prefixes) = {
+    // PUSH does not support the lock prefix
+    fail_if_lock(decoded_prefixes.lock, "PUSH");
+
     // Get operand size. Default is 32 bits. Ignore REX prefix as we can't have a 64 bit immediate.
     let operand_size = get_operand_size_ignoring_REX(decoded_prefixes, 32);
+    // Decode instruction
     let (new_read_offset, imm) = read_imm_operand(instruction_ptr, read_offset, operand_size);
     Some(new_read_offset, PUSH(operand_size, rmi_IMM(imm)))
 }
@@ -368,6 +422,10 @@ function clause decode_one_byte_instruction(0xFF, instruction_ptr, read_offset, 
     if unsigned(mod_rm_byte[REG]) != 6 then fail("The instruction to be decoded is either reserved or not implemented in this model");
     
     // We have a push instruction (PUSH r/m{16, 64})
+
+    // PUSH does not support the lock prefix
+    fail_if_lock(decoded_prefixes.lock, "PUSH");
+
     // Decode operand
     let (final_read_offset, operand_size, working_operand) = 
         decode_push_or_pop_rm_operand(instruction_ptr, new_read_offset, decoded_prefixes, mod_rm_byte);
@@ -390,10 +448,18 @@ function clause decode_one_byte_instruction(0x5 @ is_pop: bits(1) @ reg_field: b
     // get operand size. For PUSH, the default operand size is 64 bits. Ignore REX prefix
     let operand_size = get_operand_size_ignoring_REX(decoded_prefixes, 64);
 
-    if is_pop == 0b0 then
+    if is_pop == 0b0 then {
+        // PUSH does not support the lock prefix
+        fail_if_lock(decoded_prefixes.lock, "PUSH");
+
         Some(read_offset, PUSH(operand_size, rmi_REG(reg)))
-    else
+    }
+    else {
+        // POP does not support the lock prefix
+        fail_if_lock(decoded_prefixes.lock, "POP");
+
         Some(read_offset, POP(operand_size, rm_REG(reg)))
+    }
 }
 
 /* POP */
@@ -413,6 +479,9 @@ function clause execute(POP(operand_size, dest)) = {
 
 // Decode POP r/m{16, 64}
 function clause decode_one_byte_instruction(0x8F, instruction_ptr, read_offset, decoded_prefixes) = {
+    // POP does not support the lock prefix
+    fail_if_lock(decoded_prefixes.lock, "POP");
+
     // fetch mod r/m byte
     let (new_read_offset, mod_rm_byte) = read_mod_rm_byte(instruction_ptr, read_offset);
     // If the opcode extension does not point to a PUSH instruction then fail
@@ -576,6 +645,9 @@ function clause execute(IMUL(operand_size, dest, src)) = {
 
 // Decode IMUL r{16, 32, 64} r/m{16, 32, 64}
 function clause decode_two_byte_instruction(0x0FAF, instruction_ptr, read_offset, decoded_prefixes) = {
+    // IMUL does not support the lock prefix
+    fail_if_lock(decoded_prefixes.lock, "IMUL");
+
     // Get 2 operands of the addressing method + operand type: Operand 1 = Gv, Operand 2 = Ev
     let (new_read_offset, operand_size, rm_operand1, rmi_operand2) = 
         get_Gv_Ev_operands(instruction_ptr, read_offset, decoded_prefixes);
@@ -591,8 +663,7 @@ function clause decode_two_byte_instruction(0x0FAF, instruction_ptr, read_offset
         },
         // This case should be unreachable
         _ => {
-            fail("Invalid decoding for IMUL r r/m instruction");
-            None()
+            fail("Invalid decoding for IMUL r r/m instruction")
         }
     }
 }
@@ -612,8 +683,11 @@ function clause execute(CALL(rel32)) = {
 
 // Decode CALL rel32
 function clause decode_one_byte_instruction(0xE8, instruction_ptr, read_offset, decoded_prefixes) = {
+    // CALL does not support the lock prefix
+    fail_if_lock(decoded_prefixes.lock, "CALL");
     // CALL rel16, an instruction with the same opcode, is not supported in 64-bit mode
     if decoded_prefixes.op_size_override then fail("CALL rel16 is not supported in 64-bit mode");
+
     // read 32-bit immediate
     let operand = read_memory(4, instruction_ptr + read_offset, create_iFetchAccessDescriptor());
     // increment read offset
@@ -639,6 +713,9 @@ function clause execute(LEAVE(operand_size)) = {
 
 // Decode LEAVE instruction (operand size = 16 or 64 bits)
 function clause decode_one_byte_instruction(0xC9, instruction_ptr, read_offset, decoded_prefixes) = {
+    // LEAVE does not support the lock prefix
+    fail_if_lock(decoded_prefixes.lock, "LEAVE");
+
     // Get operand size. Default is 64 bits. Ignore REX prefix.
     let operand_size = get_operand_size_ignoring_REX(decoded_prefixes, 64);
     assert(operand_size == 16 | operand_size == 64); // required for type-checking as only LEAVE(16) and LEAVE(64) are allowed instructions
@@ -657,6 +734,9 @@ function clause execute(RET()) = {
 
 // Decode near RET instruction
 function clause decode_one_byte_instruction(0xC3, instruction_ptr, read_offset, decoded_prefixes) = {
+    // RET does not support the lock prefix
+    fail_if_lock(decoded_prefixes.lock, "RET");
+
     Some(read_offset, RET())
 }
 
@@ -671,6 +751,9 @@ function clause execute(JMP(rel8)) = {
 
 // Decode JMP rel8
 function clause decode_one_byte_instruction(0xEB, instruction_ptr, read_offset, decoded_prefixes) = {
+    // JMP does not support the lock prefix
+    fail_if_lock(decoded_prefixes.lock, "JMP");
+
     // read 8-bit immediate
     let operand = read_memory(1, instruction_ptr + read_offset, create_iFetchAccessDescriptor());
     // increment read offset
@@ -692,6 +775,9 @@ function clause execute(JNS(rel8)) = {
 
 // Decode JNS rel8
 function clause decode_one_byte_instruction(0x79, instruction_ptr, read_offset, decoded_prefixes) = {
+    // JNS does not support the lock prefix
+    fail_if_lock(decoded_prefixes.lock, "JNS");
+
     // read 8-bit immediate
     let operand = read_memory(1, instruction_ptr + read_offset, create_iFetchAccessDescriptor());
     // increment read offset

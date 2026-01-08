@@ -172,7 +172,7 @@ function test_decode_mov_rm8_r8() -> unit = {
   let (new_rip, decoded_instruction) = unwrap_decoded_instr(decode(RIP));
   RIP = new_rip;
   assert(unsigned(new_rip) - unsigned(old_rip) == 2, "MOV(rm8, r8): Wrong instruction length has been read");
-  assert(decoded_instruction == MOV(8, rm_REG(REG_HIGH_BYTE(4)), rmi_REG(REG_NORMAL(0))), "MOV(rm8, r8) instruction not decoded properly");
+  assert(decoded_instruction == MOV(8, rm_REG(REG_HIGH_BYTE(0)), rmi_REG(REG_NORMAL(0))), "MOV(rm8, r8) instruction not decoded properly");
 }
 
 function test_decode_mov_rm32_r32() -> unit = {
@@ -220,7 +220,7 @@ function test_decode_mov_r8_imm8() -> unit = {
   let (new_rip, decoded_instruction) = unwrap_decoded_instr(decode(RIP));
   RIP = new_rip;
   assert(unsigned(new_rip) - unsigned(old_rip) == 2, "MOV(r8, imm8): Wrong instruction length has been read");
-  assert(decoded_instruction == MOV(8, rm_REG(REG_HIGH_BYTE(7)), rmi_IMM(IMM8(0x34))), "MOV(r8, imm8) instruction not decoded properly");
+  assert(decoded_instruction == MOV(8, rm_REG(REG_HIGH_BYTE(3)), rmi_IMM(IMM8(0x34))), "MOV(r8, imm8) instruction not decoded properly");
 }
 
 function test_decode_mov_r32_imm32() -> unit = {

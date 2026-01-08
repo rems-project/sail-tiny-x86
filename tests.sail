@@ -155,8 +155,7 @@ function unwrap_decoded_instr(res) = {
   match res {
     Some(new_RIP, instr) => (new_RIP, instr),
     None() => {
-      fail("Instruction not decodable by the model");
-      (sail_zero_extend(0x0, 64), RET()) // placeholder values
+      fail("Instruction not decodable by the model")
     }
   }
 }

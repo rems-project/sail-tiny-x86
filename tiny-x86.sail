@@ -18,7 +18,11 @@ function fail_if_lock(lock, operation) = {
     else ()
 }
 
-/* MOV */
+
+
+/*------------------------------------------------------------------------------
+ * MOV
+ *-----------------------------------------------------------------------------*/
 
 function clause execute(MOV(operand_size, dest, src)) = {
     // MOV cannot occur between dest = memory location and src = memory location
@@ -128,7 +132,11 @@ function clause decode_one_byte_instruction(0b1100_110 @ not_8_bit, instruction_
     Some(new_read_offset, MOV(operand_size, operand1, rmi_IMM(imm)))
 }
 
-/* XOR */
+
+
+/*------------------------------------------------------------------------------
+ * XOR
+ *-----------------------------------------------------------------------------*/
 
 function clause execute(XOR(lock, operand_size, dest, src)) = {
     // XOR cannot occur between dest = memory location and src = memory location
@@ -229,12 +237,28 @@ function clause decode_one_byte_instruction(0b1000_000 @ not_8_bit, instruction_
     }
 }
 
-/* SFENCE */
+
+
+/*------------------------------------------------------------------------------
+ * FENCE instructions
+ *-----------------------------------------------------------------------------*/
 
 // Wait_On_Following_Stores_Until(preceding_stores_globally_visible);
 function clause execute(SFENCE()) = {
     // apply barrier
     sail_barrier(Barrier_SFENCE)
+}
+
+// Wait_On_Following_Instructions_Until(preceding_instructions_complete);
+function clause execute(LFENCE()) = {
+    // apply barrier
+    sail_barrier(Barrier_LFENCE)
+}
+
+// Wait_On_Following_Loads_And_Stores_Until(preceding_loads_and_stores_globally_visible);
+function clause execute(MFENCE()) = {
+    // apply barrier
+    sail_barrier(Barrier_MFENCE)
 }
 
 // Decode SFENCE, LFENCE and MFENCE instructions
@@ -281,27 +305,11 @@ function clause decode_two_byte_instruction(0x0FAE, instruction_ptr, read_offset
     }
 }
 
-/* LFENCE */
 
-// Wait_On_Following_Instructions_Until(preceding_instructions_complete);
-function clause execute(LFENCE()) = {
-    // apply barrier
-    sail_barrier(Barrier_LFENCE)
-}
 
-// Decode LFENCE located with Decode SFENCE and MFENCE
-
-/* MFENCE */
-
-// Wait_On_Following_Loads_And_Stores_Until(preceding_loads_and_stores_globally_visible);
-function clause execute(MFENCE()) = {
-    // apply barrier
-    sail_barrier(Barrier_MFENCE)
-}
-
-// Decode MFENCE located with Decode SFENCE and LFENCE
-
-/* CMP */
+/*------------------------------------------------------------------------------
+ * CMP
+ *-----------------------------------------------------------------------------*/
 
 function clause execute(CMP(operand_size, first, second)) = {
     // CMP cannot occur between first = memory location and second = memory location
@@ -367,7 +375,11 @@ function clause decode_one_byte_instruction(0x3B, instruction_ptr, read_offset, 
 
 // Decode CMP r/m{8, 16, 32, 64} imm{8, 16, 32, 32} is located in the XOR section
 
-/* PUSH */
+
+
+/*------------------------------------------------------------------------------
+ * PUSH
+ *-----------------------------------------------------------------------------*/
 
 function clause execute(PUSH(operand_size, src)) = {
     // PUSH instruction does not allow src = imm64, reg8 or mem8
@@ -462,7 +474,11 @@ function clause decode_one_byte_instruction(0x5 @ is_pop: bits(1) @ reg_field: b
     }
 }
 
-/* POP */
+
+
+/*------------------------------------------------------------------------------
+ * POP
+ *-----------------------------------------------------------------------------*/
 
 function clause execute(POP(operand_size, dest)) = {
     // POP instruction does not allow dest to be 8 bits long. Due to 64 bit addressing, dest also cannot be 32 bits long.
@@ -497,7 +513,11 @@ function clause decode_one_byte_instruction(0x8F, instruction_ptr, read_offset, 
 
 // Decode POP r{16, 64} is implemented with "Decode PUSH r{16, 64}"
 
-/* ADD */
+
+
+/*------------------------------------------------------------------------------
+ * ADD
+ *-----------------------------------------------------------------------------*/
 
 function clause execute(ADD(lock, operand_size, dest, src)) = {
     // ADD cannot occur between dest = memory location and src = memory location
@@ -557,7 +577,11 @@ function clause decode_one_byte_instruction(0x03, instruction_ptr, read_offset, 
 
 // Decode ADD r/m{8, 16, 32, 64} imm{8, 16, 32, 32} is located in the XOR section
 
-/* SUB */
+
+
+/*------------------------------------------------------------------------------
+ * SUB
+ *-----------------------------------------------------------------------------*/
 
 function clause execute(SUB(lock, operand_size, dest, src)) = {
     // SUB cannot occur between dest = memory location and src = memory location
@@ -617,7 +641,11 @@ function clause decode_one_byte_instruction(0x2B, instruction_ptr, read_offset, 
 
 // Decode SUB r/m{8, 16, 32, 64} imm{8, 16, 32, 32} is located in the XOR section
 
-/* IMUL */
+
+
+/*------------------------------------------------------------------------------
+ * IMUL
+ *-----------------------------------------------------------------------------*/
 
 function clause execute(IMUL(operand_size, dest, src)) = {
     // IMUL cannot occur between 8 bit operands
@@ -668,7 +696,11 @@ function clause decode_two_byte_instruction(0x0FAF, instruction_ptr, read_offset
     }
 }
 
-/* CALL */
+
+
+/*------------------------------------------------------------------------------
+ * CALL
+ *-----------------------------------------------------------------------------*/
 
 function clause execute(CALL(rel32)) = {
     /* execute near relative call */
@@ -696,7 +728,11 @@ function clause decode_one_byte_instruction(0xE8, instruction_ptr, read_offset, 
     Some(new_read_offset, CALL(operand))
 }
 
-/* LEAVE */
+
+
+/*------------------------------------------------------------------------------
+ * LEAVE
+ *-----------------------------------------------------------------------------*/
 
 function clause execute(LEAVE(operand_size)) = {
     /* copy frame pointer (RBP) into the stack pointer register (RSP)
@@ -722,7 +758,11 @@ function clause decode_one_byte_instruction(0xC9, instruction_ptr, read_offset, 
     Some(read_offset, LEAVE(operand_size))
 }
 
-/* RET */
+
+
+/*------------------------------------------------------------------------------
+ * RET
+ *-----------------------------------------------------------------------------*/
 
 function clause execute(RET()) = {
     /* execute near return */
@@ -740,7 +780,11 @@ function clause decode_one_byte_instruction(0xC3, instruction_ptr, read_offset, 
     Some(read_offset, RET())
 }
 
-/* JMP */
+
+
+/*------------------------------------------------------------------------------
+ * JMP
+ *-----------------------------------------------------------------------------*/
 
 function clause execute(JMP(rel8)) = {
     /* execute jump short */
@@ -762,7 +806,11 @@ function clause decode_one_byte_instruction(0xEB, instruction_ptr, read_offset, 
     Some(new_read_offset, JMP(operand))
 }
 
-/* JNS */
+
+
+/*------------------------------------------------------------------------------
+ * JNS
+ *-----------------------------------------------------------------------------*/
 
 function clause execute(JNS(rel8)) = {
     /* execute jump short if not sign */
@@ -794,4 +842,3 @@ function clause decode_two_byte_instruction(_, instruction_ptr, read_offset, dec
 
 end decode_one_byte_instruction
 end decode_two_byte_instruction
-end decode_three_byte_instruction

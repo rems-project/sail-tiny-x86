@@ -55,17 +55,7 @@ enum addressingMethod = {
     addressingMethod_G
 }
 
-/*------------------------------------------------------------------------------
- * DECODE Functions
- *-----------------------------------------------------------------------------*/
 
-/*
- The rough plan (not yet fully implemented):
-    decode -> decode_prefix + decode_instruction*
-    decode_instruction -> decodes opcode + decode_operands*
-    decode_operands -> decode_non_immediate* (if opcode says modr/m exists) + decode_immediate
-    decode_non_immediate -> decode modr/m byte + decode sib byte (if modr/m says it exists) + decode displacement (if modr/, says it exists)
-*/
 
 /*------------------------------------------------------------------------------
  * DECODE Prefix
@@ -136,6 +126,8 @@ function decode_prefix(instruction_ptr, decoded_prefixes) = {
     (read_offset, decoded_prefixes)
 }
 
+
+
 /*------------------------------------------------------------------------------
  * DECODE SIB byte, Mod r/m byte, and opcode reg field
  *-----------------------------------------------------------------------------*/
@@ -200,6 +192,8 @@ function read_mod_rm_byte(instruction_ptr, read_offset) = {
         (read_offset + 1, struct {bits = mod_rm_byte_contents})
 }
 
+
+
 /*------------------------------------------------------------------------------
  * DECODE Register or Memory operands
  *-----------------------------------------------------------------------------*/
@@ -237,7 +231,8 @@ function read_imm_operand(instruction_ptr, read_offset, operand_size) = {
 val wrap_reg: (reg_index, operand_size, REX) -> reg
 function wrap_reg(reg_index, operand_size, REX) = {
     if operand_size == 8 & REX.bits == 0x00 & reg_index >=4 & reg_index <= 7 then
-        REG_HIGH_BYTE(reg_index)
+        // Register is high byte. reg_index 4-7 represents actual reg_index 0-3
+        REG_HIGH_BYTE(reg_index - 4)
     else
         REG_NORMAL(reg_index)
 }
@@ -401,6 +396,7 @@ function get_Eb_Ib_operands(instruction_ptr, read_offset, REX, mod_rm_byte) = {
 }
 
 
+
 /*------------------------------------------------------------------------------
  * DECODE Instruction
  *-----------------------------------------------------------------------------*/
@@ -411,7 +407,7 @@ scattered function decode_one_byte_instruction
 
 // function to decode three byte instructions. Function definitions are inlined with corresponding execute definitions
 val decode_two_byte_instruction: (bits(16), bits(64), int, decodedPrefixes) -> option((int, ast))
-scattered function decode_three_byte_instruction
+scattered function decode_two_byte_instruction
 
 // function to decode the main instruction
 // returns the new read offset, an incomplete AST entry, and a struct of optional instruction parts we now know to exist
@@ -464,6 +460,12 @@ function decode(instruction_ptr) = {
         }
     }
 }
+
+
+
+/*------------------------------------------------------------------------------
+ * Fetch-execute
+ *-----------------------------------------------------------------------------*/
 
 val execute : ast -> unit
 scattered function execute

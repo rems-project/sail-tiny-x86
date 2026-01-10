@@ -823,7 +823,7 @@ Definition read_imm_operand (instruction_ptr : mword 64) (read_offset : Z) (oper
 (*member_Z_list operand_size [8; 16; 32; 64]*)
 : M ((Z * imm)) :=
    let operand_size_bytes := Z.quot (operand_size) (8) in
-   assert_exp' (Z.eqb (operand_size) ((Z.mul (8) (operand_size_bytes)))) "decode.sail:220.49-220.50" >>= fun _ =>
+   assert_exp' (Z.eqb (operand_size) ((Z.mul (8) (operand_size_bytes)))) "decode.sail:221.49-221.50" >>= fun _ =>
    (read_memory (operand_size_bytes) ((add_vec_int (instruction_ptr) (read_offset)))
       ((create_iFetchAccessDescriptor (tt)))) >>= fun imm_value =>
    let l__0 := operand_size in
@@ -1205,18 +1205,29 @@ Definition decode_one_byte_instruction
     else if eq_vec (b__0) (((Ox"C3")  : mword 8)) return M (option ((Z * ast))) then
       (fail_if_lock (decoded_prefixes.(decodedPrefixes_lock)) ("RET")) >>
       returnM ((Some ((read_offset, RET (tt)))))
-    else if eq_vec (b__0) (((Ox"EB")  : mword 8)) return M (option ((Z * ast))) then
-      (fail_if_lock (decoded_prefixes.(decodedPrefixes_lock)) ("JMP")) >>
+    else if orb ((eq_vec (b__0) (((Ox"EB")  : mword 8))))
+              ((orb ((eq_vec (b__0) (((Ox"79")  : mword 8))))
+                  ((eq_vec (b__0) (((Ox"75")  : mword 8))))))
+      return
+      M (option ((Z * ast))) then
+      let b__27 := b__0 in
+      let string_op : string :=
+        if eq_vec (b__27) (((Ox"EB")  : mword 8)) then "JMP"
+        else if eq_vec (b__27) (((Ox"79")  : mword 8)) then "JNS"
+        else if eq_vec (b__27) (((Ox"75")  : mword 8)) then "JNE"
+        else "Unreachable op" in
+      (fail_if_lock (decoded_prefixes.(decodedPrefixes_lock)) (string_op)) >>
       (read_memory (1) ((add_vec_int (instruction_ptr) (read_offset)))
          ((create_iFetchAccessDescriptor (tt)))) >>= fun operand =>
       let new_read_offset := Z.add (read_offset) (1) in
-      returnM ((Some ((new_read_offset, JMP (operand)))))
-    else if eq_vec (b__0) (((Ox"79")  : mword 8)) return M (option ((Z * ast))) then
-      (fail_if_lock (decoded_prefixes.(decodedPrefixes_lock)) ("JNS")) >>
-      (read_memory (1) ((add_vec_int (instruction_ptr) (read_offset)))
-         ((create_iFetchAccessDescriptor (tt)))) >>= fun operand =>
-      let new_read_offset := Z.add (read_offset) (1) in
-      returnM ((Some ((new_read_offset, JNS (operand)))))
+      let b__30 := b__0 in
+      returnM ((if eq_vec (b__30) (((Ox"EB")  : mword 8)) then
+                  Some ((new_read_offset, JMP (operand)))
+                else if eq_vec (b__30) (((Ox"79")  : mword 8)) then
+                  Some ((new_read_offset, JNS (operand)))
+                else if eq_vec (b__30) (((Ox"75")  : mword 8)) then
+                  Some ((new_read_offset, JNE (operand)))
+                else None))
     else returnM (None))
     : M (option ((Z * ast))).
 
@@ -1417,12 +1428,18 @@ Definition execute_JMP (rel8 : mword 8) : M (unit) :=
    write_reg RIP (add_vec (w__0) (displacement))
     : M (unit).
 
+Definition execute_JNE (rel8 : mword 8) : M (unit) :=
+   ((read_reg RFLAGS)  : M (mword 64)) >>= fun (w__0 : mword 64) =>
+   (if eq_vec ((_get_rflags_ZF (w__0))) ((('b"0")  : mword 1)) return M (unit) then
+      (execute_JMP (rel8))
+       : M (unit)
+    else returnM (tt))
+    : M (unit).
+
 Definition execute_JNS (rel8 : mword 8) : M (unit) :=
    ((read_reg RFLAGS)  : M (mword 64)) >>= fun (w__0 : mword 64) =>
    (if eq_vec ((_get_rflags_SF (w__0))) ((('b"0")  : mword 1)) return M (unit) then
-      let displacement := sign_extend (rel8) (64) in
-      ((read_reg RIP)  : M (mword 64)) >>= fun (w__1 : mword 64) =>
-      write_reg RIP (add_vec (w__1) (displacement))
+      (execute_JMP (rel8))
        : M (unit)
     else returnM (tt))
     : M (unit).
@@ -1593,6 +1610,7 @@ Definition execute (merge_var : ast) : M (unit) :=
    | RET arg0 => (execute_RET (arg0))  : M (unit)
    | JMP rel8 => (execute_JMP (rel8))  : M (unit)
    | JNS rel8 => (execute_JNS (rel8))  : M (unit)
+   | JNE rel8 => (execute_JNE (rel8))  : M (unit)
    end
     : M (unit).
 

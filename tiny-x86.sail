@@ -783,7 +783,7 @@ function clause decode_one_byte_instruction(0xC3, instruction_ptr, read_offset, 
 
 
 /*------------------------------------------------------------------------------
- * JMP
+ * JMP, JNS, JNE
  *-----------------------------------------------------------------------------*/
 
 function clause execute(JMP(rel8)) = {
@@ -793,46 +793,44 @@ function clause execute(JMP(rel8)) = {
     RIP = RIP + displacement;
 }
 
-// Decode JMP rel8
-function clause decode_one_byte_instruction(0xEB, instruction_ptr, read_offset, decoded_prefixes) = {
-    // JMP does not support the lock prefix
-    fail_if_lock(decoded_prefixes.lock, "JMP");
+function clause execute(JNS(rel8)) = {
+    /* execute jump short if not sign */
+    if RFLAGS[SF] == 0b0 then execute(JMP(rel8))
+}
+
+function clause execute(JNE(rel8)) = {
+    /* execute jump short if not equal */
+    if RFLAGS[ZF] == 0b0 then execute(JMP(rel8))
+}
+
+// Decode J?? rel8
+function clause decode_one_byte_instruction (
+    (opc, instruction_ptr, read_offset, decoded_prefixes) if opc == 0xEB | opc == 0x79 | opc == 0x75) = {
+        
+    let string_op: string = match opc {
+        0xEB => "JMP",
+        0x79 => "JNS",
+        0x75 => "JNE",
+        _ => "Unreachable op" // Should be unreachable
+    } in
+    // J?? does not support the lock prefix
+    fail_if_lock(decoded_prefixes.lock, string_op);
 
     // read 8-bit immediate
     let operand = read_memory(1, instruction_ptr + read_offset, create_iFetchAccessDescriptor());
     // increment read offset
     let new_read_offset = read_offset + 1;
+
     // return new read offset + decoded instruction
-    Some(new_read_offset, JMP(operand))
-}
-
-
-
-/*------------------------------------------------------------------------------
- * JNS
- *-----------------------------------------------------------------------------*/
-
-function clause execute(JNS(rel8)) = {
-    /* execute jump short if not sign */
-    if RFLAGS[SF] == 0b0 then {
-        // add the operand to the current instruction pointer value
-        let displacement = sail_sign_extend(rel8, 64);
-        RIP = RIP + displacement;
+    match opc {
+        0xEB => Some(new_read_offset, JMP(operand)),
+        0x79 => Some(new_read_offset, JNS(operand)),
+        0x75 => Some(new_read_offset, JNE(operand)),
+        _ => None() // Should be unreachable
     }
 }
 
-// Decode JNS rel8
-function clause decode_one_byte_instruction(0x79, instruction_ptr, read_offset, decoded_prefixes) = {
-    // JNS does not support the lock prefix
-    fail_if_lock(decoded_prefixes.lock, "JNS");
 
-    // read 8-bit immediate
-    let operand = read_memory(1, instruction_ptr + read_offset, create_iFetchAccessDescriptor());
-    // increment read offset
-    let new_read_offset = read_offset + 1;
-    // return new read offset + decoded instruction
-    Some(new_read_offset, JNS(operand))
-}
 
 end execute
 

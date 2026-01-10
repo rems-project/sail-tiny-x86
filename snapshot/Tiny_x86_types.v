@@ -332,7 +332,8 @@ Inductive ast :=
 | LEAVE : Z -> ast
 | RET : unit -> ast
 | JMP : imm8 -> ast
-| JNS : imm8 -> ast.
+| JNS : imm8 -> ast
+| JNE : imm8 -> ast.
 Arguments ast : clear implicits.
 
 Definition sail_ast_encode (x : ast) := match x with
@@ -351,7 +352,8 @@ Definition sail_ast_encode (x : ast) := match x with
   | LEAVE x' => encode (12, encode x')
   | RET x' => encode (13, encode x')
   | JMP x' => encode (14, encode x')
-  | JNS x' => encode (15, encode x') end.
+  | JNS x' => encode (15, encode x')
+  | JNE x' => encode (16, encode x') end.
 Definition sail_ast_decode x : option ast := match decode x with
   | Some (0, x') => MOV <$> decode x'
   | Some (1, x') => XOR <$> decode x'
@@ -369,11 +371,12 @@ Definition sail_ast_decode x : option ast := match decode x with
   | Some (13, x') => RET <$> decode x'
   | Some (14, x') => JMP <$> decode x'
   | Some (15, x') => JNS <$> decode x'
+  | Some (16, x') => JNE <$> decode x'
   | _ => None end.
 Lemma sail_ast_decode_encode : forall (x : ast), sail_ast_decode (sail_ast_encode x)  = Some x.
 Proof.
   unfold sail_ast_decode, sail_ast_encode;
-  intros [x|x|x|x|x|x|x|x|x|x|x|x|x|x|x|x]; rewrite !decode_encode; reflexivity.
+  intros [x|x|x|x|x|x|x|x|x|x|x|x|x|x|x|x|x]; rewrite !decode_encode; reflexivity.
 Qed.
 
 #[export]

@@ -42,6 +42,20 @@ function cmp_jns() -> unit = {
   assert(RIP == add_bits(current_RIP, sail_sign_extend(0x34, 64)), "JNS does not perform a correct jump when the sign is cleared");
 }
 
+function cmp_jne() -> unit = {
+  // cmp test
+  write_GPR(32, REG_NORMAL(0), 0x4444_4444);
+  execute(CMP(32, rm_REG(REG_NORMAL(0)), rmi_IMM(IMM32(0x4444_4444))));
+  assert(RFLAGS[ZF] == 1, "CMP does not set zero flag correctly");
+  // jne test
+  let current_RIP = RIP;
+  execute(JNE(0x34));
+  assert(RIP == current_RIP, "JNE performs a jump when the zero flag is set");
+  RFLAGS[ZF] = 0b0;
+  execute(JNE(0x34));
+  assert(RIP == add_bits(current_RIP, sail_sign_extend(0x34, 64)), "JNE does not perform a correct jump when the zero flag is cleared");
+}
+
 function push_pop() -> unit = {
   let RSP1 = RSP;
   // push test
@@ -124,6 +138,7 @@ function test_execute() -> unit = {
   mov_reg_to_mem();
   xor_2_numbers();
   cmp_jns();
+  cmp_jne();
   push_pop();
   add_2_numbers();
   subtract_2_numbers();
@@ -716,6 +731,25 @@ function test_decode_jns_rel8() -> unit = {
   assert(decoded_instruction == JNS(0x7A), "JNS(rel8) not decoded properly")
 }
 
+/*===========================================================
+Decode JNE test
+============================================================*/
+
+function test_decode_jne_rel8() -> unit = {
+  // Write instruction to memory
+  let instruction: bits(16) = 0x75 @ 0xFF;
+  write_instruction_to_memory(instruction, RIP);
+  let old_rip = RIP;
+
+  // Decode
+  let (new_rip, decoded_instruction) = unwrap_decoded_instr(decode(RIP));
+  RIP = new_rip;
+
+  // Test
+  assert(unsigned(new_rip) - unsigned(old_rip) == 2, "JNE(rel8): Wrong instruction length has been read");
+  assert(decoded_instruction == JNE(0xFF), "JNE(rel8) not decoded properly")
+}
+
 function test_decode() -> unit = {
   test_decode_mov_rm8_r8();
   test_decode_mov_rm32_r32();
@@ -774,8 +808,8 @@ function test_decode() -> unit = {
   test_decode_ret();
 
   test_decode_jmp_rel8();
-
   test_decode_jns_rel8();
+  test_decode_jne_rel8();
 }
 
 function main() : unit -> unit = {

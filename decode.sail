@@ -16,7 +16,8 @@ union ast = {
     LEAVE: {16, 64}, // operand size can be 16 or 64 bits
     RET: unit, // near return only
     JMP: imm8, // jump short only
-    JNS: imm8 // jump short if not sign only
+    JNS: imm8, // jump short if not sign only
+    JNE: imm8 // jump short if not equal only
 }
 
 // bitfield to easily access fields within the REX prefix

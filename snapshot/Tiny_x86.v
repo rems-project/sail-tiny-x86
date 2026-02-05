@@ -1008,11 +1008,11 @@ Definition decode_one_byte_instruction
         else 8 in
       (read_imm_operand (instruction_ptr) (read_offset) (operand_size)) >>= fun '((new_read_offset, imm)) =>
       returnM ((Some ((new_read_offset, MOV ((operand_size, rm_REG (reg), rmi_IMM (imm)))))))
-    else if eq_vec ((subrange_vec_dec (b__0) (7) (1))) ((('b"1100110")  : mword 7))
+    else if eq_vec ((subrange_vec_dec (b__0) (7) (1))) ((('b"1100011")  : mword 7))
       return
       M (option ((Z * ast))) then
       let not_8_bit := subrange_vec_dec (b__0) (0) (0) in
-      (read_mod_rm_byte (instruction_ptr) (read_offset)) >>= fun '((read_offset_2, mod_rm_byte)) =>
+      (read_mod_rm_byte (instruction_ptr) (read_offset)) >>= fun '((read_offset, mod_rm_byte)) =>
       (if neq_int ((uint ((_get_modRMByte_REG (mod_rm_byte))))) (0) return M (unit) then
          (fail ("The instruction to be decoded is either reserved or not implemented in this model"))
           : M (unit)

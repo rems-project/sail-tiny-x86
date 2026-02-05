@@ -106,9 +106,9 @@ function clause decode_one_byte_instruction(0xB @ not_8_bit: bits(1) @ reg_field
 /* WARNING: Opcodes C6 (r/m8 imm8) and C7 (all others) encode a group of instructions. 
 The exact instruction encoded is specified in the reg field of the mod r/m byte.
 Out of all instructions with opcodes C6 and C7, we currently only support the MOV instruction. */
-function clause decode_one_byte_instruction(0b1100_110 @ not_8_bit, instruction_ptr, read_offset, decoded_prefixes) = {
+function clause decode_one_byte_instruction(0b1100_011 @ not_8_bit, instruction_ptr, read_offset, decoded_prefixes) = {
     // fetch mod r/m byte
-    let (read_offset_2, mod_rm_byte) = read_mod_rm_byte(instruction_ptr, read_offset);
+    let (read_offset, mod_rm_byte) = read_mod_rm_byte(instruction_ptr, read_offset);
 
     // If the opcode extension does not point to a MOV instruction then fail
     if unsigned(mod_rm_byte[REG]) != 0 then fail("The instruction to be decoded is either reserved or not implemented in this model");

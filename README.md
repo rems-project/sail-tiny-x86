@@ -32,6 +32,9 @@ opam install .
 
 ### Building
 `make` or `make rocq` generates Rocq files from the Sail specification
+
 `make rocq-snapshot` generates the Rocq files then updates the snapshots to match
+
 `make type-check` checks that the Sail specification type-checks
+
 `make test` generates C code from the Sail specification, including tests.sail, and runs the tests generated from tests.sail

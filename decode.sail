@@ -461,26 +461,3 @@ function decode(instruction_ptr) = {
         }
     }
 }
-
-
-
-/*------------------------------------------------------------------------------
- * Fetch-execute
- *-----------------------------------------------------------------------------*/
-
-val execute : ast -> unit
-scattered function execute
-
-val fetch_execute: unit -> unit
-function fetch_execute() = {
-    let decoded = decode(rip);
-    match decoded {
-        Some(new_RIP, instr) => {
-            rip = new_RIP;
-            execute(instr)
-        },
-        None() => {
-            fail("Instruction is either not implemented in this model, reserved, or malformed.")
-        }
-    }
-}

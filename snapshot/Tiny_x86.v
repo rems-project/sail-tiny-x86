@@ -1202,7 +1202,7 @@ Definition decode_one_byte_instruction
     else if eq_vec (b__0) (((Ox"C9")  : mword 8)) return M (option ((Z * ast))) then
       (fail_if_lock (decoded_prefixes.(decodedPrefixes_lock)) ("LEAVE")) >>
       let operand_size := get_operand_size_ignoring_REX (decoded_prefixes) (64) in
-      assert_exp' (orb ((Z.eqb (operand_size) (16))) ((Z.eqb (operand_size) (64)))) "tiny-x86.sail:757.50-757.51" >>= fun _ =>
+      assert_exp' (orb ((Z.eqb (operand_size) (16))) ((Z.eqb (operand_size) (64)))) "tiny-x86.sail:782.50-782.51" >>= fun _ =>
       returnM ((Some ((read_offset, LEAVE (operand_size)))))
     else if eq_vec (b__0) (((Ox"C3")  : mword 8)) return M (option ((Z * ast))) then
       (fail_if_lock (decoded_prefixes.(decodedPrefixes_lock)) ("RET")) >>

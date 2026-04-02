@@ -1,3 +1,28 @@
+/*------------------------------------------------------------------------------
+ * Fetch-execute
+ *-----------------------------------------------------------------------------*/
+
+val execute : ast -> unit
+scattered function execute
+
+val fetch_execute: unit -> unit
+function fetch_execute() = {
+    let decoded = decode(rip);
+    match decoded {
+        Some(new_RIP, instr) => {
+            rip = new_RIP;
+            execute(instr)
+        },
+        None() => {
+            fail("Instruction is either not implemented in this model, reserved, or malformed.")
+        }
+    }
+}
+
+/*------------------------------------------------------------------------------
+ * Helper functions
+ *-----------------------------------------------------------------------------*/
+
 val fail_if_two_mem_operands : (rm_operand, rmi_operand, string) -> unit
 function fail_if_two_mem_operands(dest, src, operation) = {
     let error_message = concat_str(operation, " operation cannot occur between 2 memory locations");

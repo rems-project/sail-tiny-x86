@@ -9,49 +9,49 @@ union reg = {
 
 /* program counter */
 
-register RIP: bits(64)
+register rip: bits(64)
 
 /* general purpose registers, in ascending index order */
 
-register RAX: bits(64)
-register RCX: bits(64)
-register RDX: bits(64)
-register RBX: bits(64)
-register RSP: bits(64)
-register RBP: bits(64)
-register RSI: bits(64)
-register RDI: bits(64)
+register rax: bits(64)
+register rcx: bits(64)
+register rdx: bits(64)
+register rbx: bits(64)
+register rsp: bits(64)
+register rbp: bits(64)
+register rsi: bits(64)
+register rdi: bits(64)
 
-register R8: bits(64)
-register R9: bits(64)
-register R10: bits(64)
-register R11: bits(64)
-register R12: bits(64)
-register R13: bits(64)
-register R14: bits(64)
-register R15: bits(64)
+register r8: bits(64)
+register r9: bits(64)
+register r10: bits(64)
+register r11: bits(64)
+register r12: bits(64)
+register r13: bits(64)
+register r14: bits(64)
+register r15: bits(64)
 
 let GPRs : vector(16, register(bits(64))) = [
-    ref R15,
-    ref R14,
-    ref R13,
-    ref R12,
-    ref R11,
-    ref R10,
-    ref R9,
-    ref R8,
-    ref RDI,
-    ref RSI,
-    ref RBP,
-    ref RSP,
-    ref RBX,
-    ref RDX,
-    ref RCX,
-    ref RAX
+    ref r15,
+    ref r14,
+    ref r13,
+    ref r12,
+    ref r11,
+    ref r10,
+    ref r9,
+    ref r8,
+    ref rdi,
+    ref rsi,
+    ref rbp,
+    ref rsp,
+    ref rbx,
+    ref rdx,
+    ref rcx,
+    ref rax
 ]
 
-/* register RFLAGS, system and status flags + mostly restricted access */
-bitfield rflags : bits(64) = {
+/* register rflags, system and status flags + mostly restricted access */
+bitfield rflags_type : bits(64) = {
     // status flags
     OF: 11, // overflow flag (for operations between signed values)
     SF: 7, // sign flag
@@ -60,7 +60,7 @@ bitfield rflags : bits(64) = {
     PF: 2, // parity flag
     CF: 0 // carry flag (for operations between unsigned values)
 }
-register RFLAGS: rflags
+register rflags: rflags_type
 
 /* read and write least-significant 8,16,32,64 (32 with 0 extend for write) bits */
  val read_GPR: forall 'm, 'm in {8, 16, 32, 64}. (int('m), reg) -> bits('m)
@@ -76,7 +76,7 @@ register RFLAGS: rflags
         REG_HIGH_BYTE(i) => {
             assert(operand_size == 8, "Register is high byte enabled but operand size is not 8 bits");
             // Read high byte register
-            // AH = RAX[15 .. 8], CH = RCX[15 .. 8], DH = RDX[15 .. 8], BH = RBX[15 .. 8]
+            // AH = rax[15 .. 8], CH = rcx[15 .. 8], DH = rdx[15 .. 8], BH = rbx[15 .. 8]
             let reg = *GPRs[i];
             reg[15 .. 8]
         }
@@ -102,20 +102,20 @@ function write_GPR(operand_size, reg, value) = {
         REG_HIGH_BYTE(i) => {
             assert(operand_size == 8, "Register is high byte enabled but operand size is not 8 bits");
             // Write to high byte register
-            // AH = RAX[15 .. 8], CH = RCX[15 .. 8], DH = RDX[15 .. 8], BH = RBX[15 .. 8]
+            // AH = rax[15 .. 8], CH = rcx[15 .. 8], DH = rdx[15 .. 8], BH = rbx[15 .. 8]
             (*GPRs[i])[15 .. 8] = value;
         }
     }
 }
 
 
-/* UPDATE RFLAGS */
+/* UPDATE rflags */
 
 /* Update sign flag depending on the result of an operation */
 val update_sign_flag: forall 'm, 'm > 0. (implicit('m), bits('m)) -> unit
 function update_sign_flag(operand_size, result) = {
     // sign flag = msb of result (0 = +ve, 1 = -ve)
-    RFLAGS[SF] = [result[operand_size - 1]];
+    rflags[SF] = [result[operand_size - 1]];
 }
 
 /* Update overflow flag depending on the result of an operation
@@ -126,7 +126,7 @@ function update_overflow_flag_add_inner(first_msb, second_msb, result_msb) = {
     /* set overflow flag if, when ADDING first and second operand, 
     first and second operand have the same sign, 
     but the sign of the result is different */
-    RFLAGS[OF] = 
+    rflags[OF] = 
         if (first_msb == second_msb) & not_bool(result_msb == first_msb) then 
             0b1 
         else 
@@ -155,13 +155,13 @@ Carry flag is for unsigned values (so underlying logic is different for sub and 
 val update_carry_flag_sub: forall 'm, 'm > 0. (bits('m), bits('m)) -> unit
 function update_carry_flag_sub(first, second) = {
     // set carry flag if result < 0 (as it represents a borrow when subtracting 2 unsigned values), else clear
-    RFLAGS[CF] = if unsigned(first) < unsigned(second) then 0b1 else 0b0;
+    rflags[CF] = if unsigned(first) < unsigned(second) then 0b1 else 0b0;
 }
 
 val update_carry_flag_add: forall 'm, 'm > 0. (implicit('m), bits('m), bits('m)) -> unit
 function update_carry_flag_add(size, first, second) = {
     // set carry flag if actual result is too large to fit in size bits, else clear
-    RFLAGS[CF] = if unsigned(first) + unsigned(second) > 2^size - 1 then 0b1 else 0b0;
+    rflags[CF] = if unsigned(first) + unsigned(second) > 2^size - 1 then 0b1 else 0b0;
 }
 
 /* Update auxiliary carry flag depending on the result of an operation.
@@ -177,7 +177,7 @@ function update_aux_carry_flag_add(first, second) = update_carry_flag_add(first[
 val update_zero_flag: forall 'm, 'm >= 8. (implicit('m), bits('m)) -> unit
 function update_zero_flag(operand_size, result) = {
     // set zero flag if result = 0, else clear zero flag
-    RFLAGS[ZF] = if result == sail_zero_extend(0x0, operand_size) then 0b1 else 0b0;
+    rflags[ZF] = if result == sail_zero_extend(0x0, operand_size) then 0b1 else 0b0;
 }
 
 /* Update parity flag depending on the result of an operation */
@@ -188,10 +188,10 @@ function update_parity_flag(result) = {
     foreach (i from 0 to 7) {
         if result[i] == bitone then even_parity = flip_bit(even_parity);
     };
-    RFLAGS[PF] = [even_parity];
+    rflags[PF] = [even_parity];
 }
 
-/* Update RFLAGS for sub and add operations */
+/* Update rflags for sub and add operations */
 
 val update_RFLAGS_sub: forall 'm, 'm >=8. (bits('m), bits('m), bits('m)) -> unit
 function update_RFLAGS_sub(first, second, result) = {

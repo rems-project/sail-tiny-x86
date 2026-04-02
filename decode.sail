@@ -134,7 +134,7 @@ function decode_prefix(instruction_ptr, decoded_prefixes) = {
  *-----------------------------------------------------------------------------*/
 
 // for the following 4 helper functions, see section 2.2.1.2 - More on REX Prefix Fields
-// The REX prefix may allow one to access registers R8-R15
+// The REX prefix may allow one to access registers r8-r15
 
 val get_mod_rm_byte_REG: (modRMByte, REX) -> reg_index
 function get_mod_rm_byte_REG(mod_rm_byte, REX) = {
@@ -171,7 +171,7 @@ val decode_sib_byte: (SIBByte, REX) -> bits(64)
 function decode_sib_byte(sib_byte, REX) = {
     // value stored in the SIB byte is base + index * (2^scale)
     /* Note: if the value stored in the base or index fields of the SIB byte is 5, 
-    then we can't read the value stored in this register location, as the index is of the RBP,*/
+    then we can't read the value stored in this register location, as the index is of the rbp,*/
     let sib_byte_BASE = get_sib_byte_BASE(sib_byte, REX);
     let sib_byte_INDEX = get_sib_byte_INDEX(sib_byte, REX);
     let base = if sib_byte_BASE == 5 then sail_zero_extend(0x0, 64) else {
@@ -473,10 +473,10 @@ scattered function execute
 
 val fetch_execute: unit -> unit
 function fetch_execute() = {
-    let decoded = decode(RIP);
+    let decoded = decode(rip);
     match decoded {
         Some(new_RIP, instr) => {
-            RIP = new_RIP;
+            rip = new_RIP;
             execute(instr)
         },
         None() => {

@@ -160,8 +160,8 @@ function clause execute(XOR(lock, operand_size, dest, src)) = {
 
     /* change value of status flags */
     // clear overflow and carry flag
-    RFLAGS[OF] = 0b0;
-    RFLAGS[CF] = 0b0;
+    rflags[OF] = 0b0;
+    rflags[CF] = 0b0;
     // assign values to other flags (but not AF as its value is undefined for XOR)
     update_sign_flag(result);
     update_zero_flag(result);
@@ -394,10 +394,10 @@ function clause execute(PUSH(operand_size, src)) = {
     // If the source operand is an immediate of size less than the operand size, then sign-extend the value
     // default operand size is 8 bytes = 64 bits
     let src_val = sail_sign_extend(read_operand(operand_size, src), 64);
-    // subtract 8 from RSP to point to the new top of the stack
-    RSP = sub_bits(RSP, sail_zero_extend(0x8, 64));
+    // subtract 8 from rsp to point to the new top of the stack
+    rsp = sub_bits(rsp, sail_zero_extend(0x8, 64));
     // push the new item to the top of the stack
-    let dest_address = rm_MEM(RSP);
+    let dest_address = rm_MEM(rsp);
     write_operand(64, dest_address, src_val)
 }
 
@@ -487,10 +487,10 @@ function clause execute(POP(operand_size, dest)) = {
     if operand_size == 16 then fail("dest size for POP operation not implemented in this model");
 
     // pop the value at the top of the stack to dest
-    let popped_val = read_operand(64, rm_MEM(RSP));
+    let popped_val = read_operand(64, rm_MEM(rsp));
     write_operand(64, dest, popped_val);
     // increment stack pointer to free the popped stack space
-    RSP = RSP + 8;
+    rsp = rsp + 8;
 }
 
 // Decode POP r/m{16, 64}
@@ -662,12 +662,12 @@ function clause execute(IMUL(operand_size, dest, src)) = {
 
     // set carry and overflow flag if the result overflows the allocated space (operand_size bits), else clear
     if sail_sign_extend(result, operand_size * 2) == result_128 then {
-        RFLAGS[CF] = 0b0;
-        RFLAGS[OF] = 0b0;
+        rflags[CF] = 0b0;
+        rflags[OF] = 0b0;
     }
     else {
-        RFLAGS[CF] = 0b1;
-        RFLAGS[OF] = 0b1;
+        rflags[CF] = 0b1;
+        rflags[OF] = 0b1;
     }
 }
 
@@ -706,11 +706,11 @@ function clause execute(CALL(rel32)) = {
     /* execute near relative call */
     let displacement = sail_sign_extend(rel32, 64);
     // update stack pointer to point to the new top of the stack
-    RSP = sub_bits(RSP, sail_zero_extend(0x8, 64));
-    // push current RIP to the stack
-    write_operand(64, rm_MEM(RSP), RIP);
-    // change RIP as specified by the instruction
-    RIP = add_bits(RIP, displacement);
+    rsp = sub_bits(rsp, sail_zero_extend(0x8, 64));
+    // push current rip to the stack
+    write_operand(64, rm_MEM(rsp), rip);
+    // change rip as specified by the instruction
+    rip = add_bits(rip, displacement);
 }
 
 // Decode CALL rel32
@@ -735,16 +735,16 @@ function clause decode_one_byte_instruction(0xE8, instruction_ptr, read_offset, 
  *-----------------------------------------------------------------------------*/
 
 function clause execute(LEAVE(operand_size)) = {
-    /* copy frame pointer (RBP) into the stack pointer register (RSP)
+    /* copy frame pointer (rbp) into the stack pointer register (rsp)
     to release the stack space allocated to the topmost stack frame */
-    RSP = RBP;
+    rsp = rbp;
 
     // pop value from the stack
-    let popped_value = read_operand(operand_size, rm_MEM(RSP));
-    // store popped value in RBP
+    let popped_value = read_operand(operand_size, rm_MEM(rsp));
+    // store popped value in rbp
     write_GPR(operand_size, REG_NORMAL(5), popped_value);
     // increment stack pointer to free the popped stack space
-    RSP = RSP + (operand_size / 8);
+    rsp = rsp + (operand_size / 8);
 }
 
 // Decode LEAVE instruction (operand size = 16 or 64 bits)
@@ -766,10 +766,10 @@ function clause decode_one_byte_instruction(0xC9, instruction_ptr, read_offset, 
 
 function clause execute(RET()) = {
     /* execute near return */
-    // pop value into RIP
-    RIP = read_operand(64, rm_MEM(RSP));
+    // pop value into rip
+    rip = read_operand(64, rm_MEM(rsp));
     // increment stack pointer to free the popped stack space
-    RSP = RSP + 8;
+    rsp = rsp + 8;
 }
 
 // Decode near RET instruction
@@ -790,17 +790,17 @@ function clause execute(JMP(rel8)) = {
     /* execute jump short */
     // add the operand to the current instruction pointer value
     let displacement = sail_sign_extend(rel8, 64);
-    RIP = RIP + displacement;
+    rip = rip + displacement;
 }
 
 function clause execute(JNS(rel8)) = {
     /* execute jump short if not sign */
-    if RFLAGS[SF] == 0b0 then execute(JMP(rel8))
+    if rflags[SF] == 0b0 then execute(JMP(rel8))
 }
 
 function clause execute(JNE(rel8)) = {
     /* execute jump short if not equal */
-    if RFLAGS[ZF] == 0b0 then execute(JMP(rel8))
+    if rflags[ZF] == 0b0 then execute(JMP(rel8))
 }
 
 // Decode J?? rel8

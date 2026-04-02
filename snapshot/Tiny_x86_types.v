@@ -50,7 +50,7 @@ Instance Countable_reg : Countable reg := {|
 #[export]
 Instance dummy_reg : Inhabited (reg) := { inhabitant := REG_HIGH_BYTE inhabitant }.
 
-Definition rflags : Type := mword 64.
+Definition rflags_type : Type := mword 64.
 
 Inductive AccessType := AccessType_IFETCH | AccessType_RW.
 Definition num_of_AccessType (arg_ : AccessType) : Z :=
@@ -522,68 +522,68 @@ Definition mem_acc_is_atomic_rmw (acc : AccessDescriptor) : bool :=
 
 
 Variant register_bitvector_64 :=
-  | RIP
-  | RAX
-  | RCX
-  | RDX
-  | RBX
-  | RSP
-  | RBP
-  | RSI
-  | RDI
-  | R8
-  | R9
-  | R10
-  | R11
-  | R12
-  | R13
-  | R14
-  | R15
-  | RFLAGS
+  | rip
+  | rax
+  | rcx
+  | rdx
+  | rbx
+  | rsp
+  | rbp
+  | rsi
+  | rdi
+  | r8
+  | r9
+  | r10
+  | r11
+  | r12
+  | r13
+  | r14
+  | r15
+  | rflags
 .
 
 Definition num_of_register_bitvector_64 (r : register_bitvector_64) : Z :=
   match r with
-  | RIP => 0
-  | RAX => 1
-  | RCX => 2
-  | RDX => 3
-  | RBX => 4
-  | RSP => 5
-  | RBP => 6
-  | RSI => 7
-  | RDI => 8
-  | R8 => 9
-  | R9 => 10
-  | R10 => 11
-  | R11 => 12
-  | R12 => 13
-  | R13 => 14
-  | R14 => 15
-  | R15 => 16
-  | RFLAGS => 17
+  | rip => 0
+  | rax => 1
+  | rcx => 2
+  | rdx => 3
+  | rbx => 4
+  | rsp => 5
+  | rbp => 6
+  | rsi => 7
+  | rdi => 8
+  | r8 => 9
+  | r9 => 10
+  | r10 => 11
+  | r11 => 12
+  | r12 => 13
+  | r13 => 14
+  | r14 => 15
+  | r15 => 16
+  | rflags => 17
   end.
 Definition register_bitvector_64_of_num (i : Z) : register_bitvector_64 :=
   match i with
-  | 0 => RIP
-  | 1 => RAX
-  | 2 => RCX
-  | 3 => RDX
-  | 4 => RBX
-  | 5 => RSP
-  | 6 => RBP
-  | 7 => RSI
-  | 8 => RDI
-  | 9 => R8
-  | 10 => R9
-  | 11 => R10
-  | 12 => R11
-  | 13 => R12
-  | 14 => R13
-  | 15 => R14
-  | 16 => R15
-  | 17 => RFLAGS
-  | _ => RIP
+  | 0 => rip
+  | 1 => rax
+  | 2 => rcx
+  | 3 => rdx
+  | 4 => rbx
+  | 5 => rsp
+  | 6 => rbp
+  | 7 => rsi
+  | 8 => rdi
+  | 9 => r8
+  | 10 => r9
+  | 11 => r10
+  | 12 => r11
+  | 13 => r12
+  | 14 => r13
+  | 15 => r14
+  | 16 => r15
+  | 17 => rflags
+  | _ => rip
   end.
 Lemma register_bitvector_64_num_of_roundtrip (x : register_bitvector_64) : register_bitvector_64_of_num (num_of_register_bitvector_64 x) = x.
   destruct x; reflexivity.
@@ -614,24 +614,24 @@ Qed.
 Hint Rewrite register_bitvector_64_beq_iff : register_beq_iffs.
 Hint Rewrite register_bitvector_64_beq_refl : register_beq_refls.
 Definition register_bitvector_64_list : list (string * register_bitvector_64) := [
-  ("RIP", RIP);
-  ("RAX", RAX);
-  ("RCX", RCX);
-  ("RDX", RDX);
-  ("RBX", RBX);
-  ("RSP", RSP);
-  ("RBP", RBP);
-  ("RSI", RSI);
-  ("RDI", RDI);
-  ("R8", R8);
-  ("R9", R9);
-  ("R10", R10);
-  ("R11", R11);
-  ("R12", R12);
-  ("R13", R13);
-  ("R14", R14);
-  ("R15", R15);
-  ("RFLAGS", RFLAGS)
+  ("rip", rip);
+  ("rax", rax);
+  ("rcx", rcx);
+  ("rdx", rdx);
+  ("rbx", rbx);
+  ("rsp", rsp);
+  ("rbp", rbp);
+  ("rsi", rsi);
+  ("rdi", rdi);
+  ("r8", r8);
+  ("r9", r9);
+  ("r10", r10);
+  ("r11", r11);
+  ("r12", r12);
+  ("r13", r13);
+  ("r14", r14);
+  ("r15", r15);
+  ("rflags", rflags)
 ].
 
 Instance Decidable_eq_register_bitvector_64 : EqDecision register_bitvector_64 := register_bitvector_64_eq_dec.
@@ -777,43 +777,43 @@ refine {|
 abstract (destruct r; apply decode_encode).
 Defined.
 
-Definition RIP_ref : register_ref _ :=
-  Build_register_ref register type_of_register _ "RIP" RIP (fun x => x) (fun x => x).
-Definition RAX_ref : register_ref _ :=
-  Build_register_ref register type_of_register _ "RAX" RAX (fun x => x) (fun x => x).
-Definition RCX_ref : register_ref _ :=
-  Build_register_ref register type_of_register _ "RCX" RCX (fun x => x) (fun x => x).
-Definition RDX_ref : register_ref _ :=
-  Build_register_ref register type_of_register _ "RDX" RDX (fun x => x) (fun x => x).
-Definition RBX_ref : register_ref _ :=
-  Build_register_ref register type_of_register _ "RBX" RBX (fun x => x) (fun x => x).
-Definition RSP_ref : register_ref _ :=
-  Build_register_ref register type_of_register _ "RSP" RSP (fun x => x) (fun x => x).
-Definition RBP_ref : register_ref _ :=
-  Build_register_ref register type_of_register _ "RBP" RBP (fun x => x) (fun x => x).
-Definition RSI_ref : register_ref _ :=
-  Build_register_ref register type_of_register _ "RSI" RSI (fun x => x) (fun x => x).
-Definition RDI_ref : register_ref _ :=
-  Build_register_ref register type_of_register _ "RDI" RDI (fun x => x) (fun x => x).
-Definition R8_ref : register_ref _ :=
-  Build_register_ref register type_of_register _ "R8" R8 (fun x => x) (fun x => x).
-Definition R9_ref : register_ref _ :=
-  Build_register_ref register type_of_register _ "R9" R9 (fun x => x) (fun x => x).
-Definition R10_ref : register_ref _ :=
-  Build_register_ref register type_of_register _ "R10" R10 (fun x => x) (fun x => x).
-Definition R11_ref : register_ref _ :=
-  Build_register_ref register type_of_register _ "R11" R11 (fun x => x) (fun x => x).
-Definition R12_ref : register_ref _ :=
-  Build_register_ref register type_of_register _ "R12" R12 (fun x => x) (fun x => x).
-Definition R13_ref : register_ref _ :=
-  Build_register_ref register type_of_register _ "R13" R13 (fun x => x) (fun x => x).
-Definition R14_ref : register_ref _ :=
-  Build_register_ref register type_of_register _ "R14" R14 (fun x => x) (fun x => x).
-Definition R15_ref : register_ref _ :=
-  Build_register_ref register type_of_register _ "R15" R15 (fun x => x) (fun x => x).
-Definition RFLAGS_ref : register_ref _ :=
-  Build_register_ref register type_of_register _ "RFLAGS" RFLAGS (fun x => x) (fun x => x).
-Instance dummy_register_bitvector_64 : Inhabited (register_ref _) := populate RIP_ref.
+Definition rip_ref : register_ref _ :=
+  Build_register_ref register type_of_register _ "rip" rip (fun x => x) (fun x => x).
+Definition rax_ref : register_ref _ :=
+  Build_register_ref register type_of_register _ "rax" rax (fun x => x) (fun x => x).
+Definition rcx_ref : register_ref _ :=
+  Build_register_ref register type_of_register _ "rcx" rcx (fun x => x) (fun x => x).
+Definition rdx_ref : register_ref _ :=
+  Build_register_ref register type_of_register _ "rdx" rdx (fun x => x) (fun x => x).
+Definition rbx_ref : register_ref _ :=
+  Build_register_ref register type_of_register _ "rbx" rbx (fun x => x) (fun x => x).
+Definition rsp_ref : register_ref _ :=
+  Build_register_ref register type_of_register _ "rsp" rsp (fun x => x) (fun x => x).
+Definition rbp_ref : register_ref _ :=
+  Build_register_ref register type_of_register _ "rbp" rbp (fun x => x) (fun x => x).
+Definition rsi_ref : register_ref _ :=
+  Build_register_ref register type_of_register _ "rsi" rsi (fun x => x) (fun x => x).
+Definition rdi_ref : register_ref _ :=
+  Build_register_ref register type_of_register _ "rdi" rdi (fun x => x) (fun x => x).
+Definition r8_ref : register_ref _ :=
+  Build_register_ref register type_of_register _ "r8" r8 (fun x => x) (fun x => x).
+Definition r9_ref : register_ref _ :=
+  Build_register_ref register type_of_register _ "r9" r9 (fun x => x) (fun x => x).
+Definition r10_ref : register_ref _ :=
+  Build_register_ref register type_of_register _ "r10" r10 (fun x => x) (fun x => x).
+Definition r11_ref : register_ref _ :=
+  Build_register_ref register type_of_register _ "r11" r11 (fun x => x) (fun x => x).
+Definition r12_ref : register_ref _ :=
+  Build_register_ref register type_of_register _ "r12" r12 (fun x => x) (fun x => x).
+Definition r13_ref : register_ref _ :=
+  Build_register_ref register type_of_register _ "r13" r13 (fun x => x) (fun x => x).
+Definition r14_ref : register_ref _ :=
+  Build_register_ref register type_of_register _ "r14" r14 (fun x => x) (fun x => x).
+Definition r15_ref : register_ref _ :=
+  Build_register_ref register type_of_register _ "r15" r15 (fun x => x) (fun x => x).
+Definition rflags_ref : register_ref _ :=
+  Build_register_ref register type_of_register _ "rflags" rflags (fun x => x) (fun x => x).
+Instance dummy_register_bitvector_64 : Inhabited (register_ref _) := populate rip_ref.
 
 
 (* Definitions to support the lifting to the sequential monad *)

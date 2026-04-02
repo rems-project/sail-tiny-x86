@@ -130,18 +130,18 @@ Definition fail {a : Type} (message : string) : M (a) :=
 Definition flip_bit (bit_to_flip : bitU) : bitU := if eq_bit (bit_to_flip) (B0) then B1 else B0.
 
 Definition GPRs : vec (register_ref (bits 64)) 16 :=
-vec_of_list_len [R15_ref;R14_ref;R13_ref;R12_ref;R11_ref;R10_ref;R9_ref;R8_ref;RDI_ref;RSI_ref;
-                 RBP_ref;RSP_ref;RBX_ref;RDX_ref;RCX_ref;RAX_ref].
+vec_of_list_len [r15_ref;r14_ref;r13_ref;r12_ref;r11_ref;r10_ref;r9_ref;r8_ref;rdi_ref;rsi_ref;
+                 rbp_ref;rsp_ref;rbx_ref;rdx_ref;rcx_ref;rax_ref].
 #[export] Hint Unfold GPRs : sail.
-Definition undefined_rflags '(tt : unit) : M (mword 64) :=
+Definition undefined_rflags_type '(tt : unit) : M (mword 64) :=
    (undefined_bitvector (64))  : M (mword 64).
 
-Definition Mk_rflags (v : mword 64) : mword 64 := v.
+Definition Mk_rflags_type (v : mword 64) : mword 64 := v.
 
-Definition _get_rflags_bits (v : mword 64) : mword 64 :=
+Definition _get_rflags_type_bits (v : mword 64) : mword 64 :=
    subrange_vec_dec (v) ((Z.sub (64) (1))) (0).
 
-Definition _update_rflags_bits (v : mword 64) (x : mword 64) : mword 64 :=
+Definition _update_rflags_type_bits (v : mword 64) (x : mword 64) : mword 64 :=
    update_subrange_vec_dec (v) ((Z.sub (64) (1))) (0) (x).
 
 Definition _update_REX_bits (v : mword 8) (x : mword 8) : mword 8 :=
@@ -153,8 +153,10 @@ Definition _update_SIBByte_bits (v : mword 8) (x : mword 8) : mword 8 :=
 Definition _update_modRMByte_bits (v : mword 8) (x : mword 8) : mword 8 :=
    update_subrange_vec_dec (v) ((Z.sub (8) (1))) (0) (x).
 
-Definition _set_rflags_bits (r_ref : register_ref (mword 64)) (v : mword 64) : M (unit) :=
-   (reg_deref (r_ref)) >>= fun r => write_reg_ref r_ref (_update_rflags_bits (r) (v))  : M (unit).
+Definition _set_rflags_type_bits (r_ref : register_ref (mword 64)) (v : mword 64) : M (unit) :=
+   (reg_deref (r_ref)) >>= fun r =>
+   write_reg_ref r_ref (_update_rflags_type_bits (r) (v))
+    : M (unit).
 
 Definition _get_REX_bits (v : mword 8) : mword 8 := subrange_vec_dec (v) ((Z.sub (8) (1))) (0).
 
@@ -172,53 +174,53 @@ Definition _set_SIBByte_bits (r_ref : register_ref (mword 8)) (v : mword 8) : M 
 Definition _set_modRMByte_bits (r_ref : register_ref (mword 8)) (v : mword 8) : M (unit) :=
    (reg_deref (r_ref)) >>= fun r => write_reg_ref r_ref (_update_modRMByte_bits (r) (v))  : M (unit).
 
-Definition _get_rflags_AF (v : mword 64) : mword 1 := subrange_vec_dec (v) (4) (4).
+Definition _get_rflags_type_AF (v : mword 64) : mword 1 := subrange_vec_dec (v) (4) (4).
 
-Definition _update_rflags_AF (v : mword 64) (x : mword 1) : mword 64 :=
+Definition _update_rflags_type_AF (v : mword 64) (x : mword 1) : mword 64 :=
    update_subrange_vec_dec (v) (4) (4) (x).
 
-Definition _set_rflags_AF (r_ref : register_ref (mword 64)) (v : mword 1) : M (unit) :=
-   (reg_deref (r_ref)) >>= fun r => write_reg_ref r_ref (_update_rflags_AF (r) (v))  : M (unit).
+Definition _set_rflags_type_AF (r_ref : register_ref (mword 64)) (v : mword 1) : M (unit) :=
+   (reg_deref (r_ref)) >>= fun r => write_reg_ref r_ref (_update_rflags_type_AF (r) (v))  : M (unit).
 
-Definition _get_rflags_CF (v : mword 64) : mword 1 := subrange_vec_dec (v) (0) (0).
+Definition _get_rflags_type_CF (v : mword 64) : mword 1 := subrange_vec_dec (v) (0) (0).
 
-Definition _update_rflags_CF (v : mword 64) (x : mword 1) : mword 64 :=
+Definition _update_rflags_type_CF (v : mword 64) (x : mword 1) : mword 64 :=
    update_subrange_vec_dec (v) (0) (0) (x).
 
-Definition _set_rflags_CF (r_ref : register_ref (mword 64)) (v : mword 1) : M (unit) :=
-   (reg_deref (r_ref)) >>= fun r => write_reg_ref r_ref (_update_rflags_CF (r) (v))  : M (unit).
+Definition _set_rflags_type_CF (r_ref : register_ref (mword 64)) (v : mword 1) : M (unit) :=
+   (reg_deref (r_ref)) >>= fun r => write_reg_ref r_ref (_update_rflags_type_CF (r) (v))  : M (unit).
 
-Definition _get_rflags_OF (v : mword 64) : mword 1 := subrange_vec_dec (v) (11) (11).
+Definition _get_rflags_type_OF (v : mword 64) : mword 1 := subrange_vec_dec (v) (11) (11).
 
-Definition _update_rflags_OF (v : mword 64) (x : mword 1) : mword 64 :=
+Definition _update_rflags_type_OF (v : mword 64) (x : mword 1) : mword 64 :=
    update_subrange_vec_dec (v) (11) (11) (x).
 
-Definition _set_rflags_OF (r_ref : register_ref (mword 64)) (v : mword 1) : M (unit) :=
-   (reg_deref (r_ref)) >>= fun r => write_reg_ref r_ref (_update_rflags_OF (r) (v))  : M (unit).
+Definition _set_rflags_type_OF (r_ref : register_ref (mword 64)) (v : mword 1) : M (unit) :=
+   (reg_deref (r_ref)) >>= fun r => write_reg_ref r_ref (_update_rflags_type_OF (r) (v))  : M (unit).
 
-Definition _get_rflags_PF (v : mword 64) : mword 1 := subrange_vec_dec (v) (2) (2).
+Definition _get_rflags_type_PF (v : mword 64) : mword 1 := subrange_vec_dec (v) (2) (2).
 
-Definition _update_rflags_PF (v : mword 64) (x : mword 1) : mword 64 :=
+Definition _update_rflags_type_PF (v : mword 64) (x : mword 1) : mword 64 :=
    update_subrange_vec_dec (v) (2) (2) (x).
 
-Definition _set_rflags_PF (r_ref : register_ref (mword 64)) (v : mword 1) : M (unit) :=
-   (reg_deref (r_ref)) >>= fun r => write_reg_ref r_ref (_update_rflags_PF (r) (v))  : M (unit).
+Definition _set_rflags_type_PF (r_ref : register_ref (mword 64)) (v : mword 1) : M (unit) :=
+   (reg_deref (r_ref)) >>= fun r => write_reg_ref r_ref (_update_rflags_type_PF (r) (v))  : M (unit).
 
-Definition _get_rflags_SF (v : mword 64) : mword 1 := subrange_vec_dec (v) (7) (7).
+Definition _get_rflags_type_SF (v : mword 64) : mword 1 := subrange_vec_dec (v) (7) (7).
 
-Definition _update_rflags_SF (v : mword 64) (x : mword 1) : mword 64 :=
+Definition _update_rflags_type_SF (v : mword 64) (x : mword 1) : mword 64 :=
    update_subrange_vec_dec (v) (7) (7) (x).
 
-Definition _set_rflags_SF (r_ref : register_ref (mword 64)) (v : mword 1) : M (unit) :=
-   (reg_deref (r_ref)) >>= fun r => write_reg_ref r_ref (_update_rflags_SF (r) (v))  : M (unit).
+Definition _set_rflags_type_SF (r_ref : register_ref (mword 64)) (v : mword 1) : M (unit) :=
+   (reg_deref (r_ref)) >>= fun r => write_reg_ref r_ref (_update_rflags_type_SF (r) (v))  : M (unit).
 
-Definition _get_rflags_ZF (v : mword 64) : mword 1 := subrange_vec_dec (v) (6) (6).
+Definition _get_rflags_type_ZF (v : mword 64) : mword 1 := subrange_vec_dec (v) (6) (6).
 
-Definition _update_rflags_ZF (v : mword 64) (x : mword 1) : mword 64 :=
+Definition _update_rflags_type_ZF (v : mword 64) (x : mword 1) : mword 64 :=
    update_subrange_vec_dec (v) (6) (6) (x).
 
-Definition _set_rflags_ZF (r_ref : register_ref (mword 64)) (v : mword 1) : M (unit) :=
-   (reg_deref (r_ref)) >>= fun r => write_reg_ref r_ref (_update_rflags_ZF (r) (v))  : M (unit).
+Definition _set_rflags_type_ZF (r_ref : register_ref (mword 64)) (v : mword 1) : M (unit) :=
+   (reg_deref (r_ref)) >>= fun r => write_reg_ref r_ref (_update_rflags_type_ZF (r) (v))  : M (unit).
 
 Definition read_GPR (operand_size : Z) (reg : reg) (*member_Z_list operand_size [8; 16; 32; 64]*)
 : M (mword operand_size) :=
@@ -269,18 +271,18 @@ Definition write_GPR (operand_size : Z) (reg : reg) (value : mword operand_size)
 
 Definition update_sign_flag (operand_size : Z) (result' : mword operand_size) (*operand_size >? 0*)
 : M (unit) :=
-   ((read_reg RFLAGS)  : M (mword 64)) >>= fun (w__0 : mword 64) =>
+   ((read_reg rflags)  : M (mword 64)) >>= fun (w__0 : mword 64) =>
    write_reg
-     RFLAGS
+     rflags
      (update_subrange_vec_dec (w__0) (7) (7)
         ((vec_of_bits [access_vec_dec (result') ((Z.sub (operand_size) (1)))]  : mword 1)))
     : M (unit).
 
 Definition update_overflow_flag_add_inner (first_msb : bitU) (second_msb : bitU) (result_msb : bitU)
 : M (unit) :=
-   ((read_reg RFLAGS)  : M (mword 64)) >>= fun (w__0 : mword 64) =>
+   ((read_reg rflags)  : M (mword 64)) >>= fun (w__0 : mword 64) =>
    write_reg
-     RFLAGS
+     rflags
      (update_subrange_vec_dec (w__0) (11) (11)
         ((if andb ((eq_bit (first_msb) (second_msb))) ((negb ((eq_bit (result_msb) (first_msb)))))
           then
@@ -306,9 +308,9 @@ Definition update_overflow_flag_add
     : M (unit).
 
 Definition update_carry_flag_sub {m : Z} (first : mword m) (second : mword m) (*m >? 0*) : M (unit) :=
-   ((read_reg RFLAGS)  : M (mword 64)) >>= fun (w__0 : mword 64) =>
+   ((read_reg rflags)  : M (mword 64)) >>= fun (w__0 : mword 64) =>
    write_reg
-     RFLAGS
+     rflags
      (update_subrange_vec_dec (w__0) (0) (0)
         ((if Z.ltb ((uint (first))) ((uint (second))) then ('b"1")  : mword 1
           else ('b"0")  : mword 1)))
@@ -316,9 +318,9 @@ Definition update_carry_flag_sub {m : Z} (first : mword m) (second : mword m) (*
 
 Definition update_carry_flag_add (size : Z) (first : mword size) (second : mword size) (*size >? 0*)
 : M (unit) :=
-   ((read_reg RFLAGS)  : M (mword 64)) >>= fun (w__0 : mword 64) =>
+   ((read_reg rflags)  : M (mword 64)) >>= fun (w__0 : mword 64) =>
    write_reg
-     RFLAGS
+     rflags
      (update_subrange_vec_dec (w__0) (0) (0)
         ((if Z.gtb ((Z.add ((uint (first))) ((uint (second))))) ((Z.sub ((pow2 (size))) (1))) then
             ('b"1")
@@ -339,9 +341,9 @@ Definition update_aux_carry_flag_add {m : Z} (first : mword m) (second : mword m
 
 Definition update_zero_flag (operand_size : Z) (result' : mword operand_size) (*operand_size >=? 8*)
 : M (unit) :=
-   ((read_reg RFLAGS)  : M (mword 64)) >>= fun (w__0 : mword 64) =>
+   ((read_reg rflags)  : M (mword 64)) >>= fun (w__0 : mword 64) =>
    write_reg
-     RFLAGS
+     rflags
      (update_subrange_vec_dec (w__0) (6) (6)
         ((if eq_vec (result') ((zero_extend (((Ox"0")  : mword 4)) (operand_size))) then
             ('b"1")
@@ -358,9 +360,9 @@ Definition update_parity_flag {m : Z} (result' : mword m) (*m >=? 8*) : M (unit)
        (fun i even_parity =>
          if eq_bit ((access_vec_dec (result') (i))) (B1) then flip_bit (even_parity)
          else even_parity)) in
-   ((read_reg RFLAGS)  : M (mword 64)) >>= fun (w__0 : mword 64) =>
+   ((read_reg rflags)  : M (mword 64)) >>= fun (w__0 : mword 64) =>
    write_reg
-     RFLAGS
+     rflags
      (update_subrange_vec_dec (w__0) (2) (2) ((vec_of_bits [even_parity]  : mword 1)))
     : M (unit).
 
@@ -1368,13 +1370,13 @@ Definition execute_ADD (lock : bool) (operand_size : Z) (dest : rm_operand) (src
 
 Definition execute_CALL (rel32 : mword 32) : M (unit) :=
    let displacement := sign_extend (rel32) (64) in
-   ((read_reg RSP)  : M (mword 64)) >>= fun (w__0 : mword 64) =>
-   write_reg RSP (sub_vec (w__0) ((zero_extend (((Ox"8")  : mword 4)) (64)))) >>
-   ((read_reg RSP)  : M (mword 64)) >>= fun (w__1 : mword 64) =>
-   ((read_reg RIP)  : M (mword 64)) >>= fun (w__2 : mword 64) =>
+   ((read_reg rsp)  : M (mword 64)) >>= fun (w__0 : mword 64) =>
+   write_reg rsp (sub_vec (w__0) ((zero_extend (((Ox"8")  : mword 4)) (64)))) >>
+   ((read_reg rsp)  : M (mword 64)) >>= fun (w__1 : mword 64) =>
+   ((read_reg rip)  : M (mword 64)) >>= fun (w__2 : mword 64) =>
    (write_rm_operand_without_lock (64) ((rm_MEM (w__1))) (w__2)) >>
-   ((read_reg RIP)  : M (mword 64)) >>= fun (w__3 : mword 64) =>
-   write_reg RIP (add_vec (w__3) (displacement))
+   ((read_reg rip)  : M (mword 64)) >>= fun (w__3 : mword 64) =>
+   write_reg rip (add_vec (w__3) (displacement))
     : M (unit).
 
 Definition execute_CMP (operand_size : Z) (first : rm_operand) (second : rmi_operand)
@@ -1409,49 +1411,49 @@ Definition execute_IMUL (operand_size : Z) (dest : Z) (src : rm_operand)
    (if eq_vec ((sign_extend (result') ((Z.mul (operand_size) (2))))) (result_128)
       return
       M (unit) then
-      ((read_reg RFLAGS)  : M (mword 64)) >>= fun (w__0 : mword 64) =>
-      write_reg RFLAGS (update_subrange_vec_dec (w__0) (0) (0) ((('b"0")  : mword 1))) >>
-      ((read_reg RFLAGS)  : M (mword 64)) >>= fun (w__1 : mword 64) =>
-      write_reg RFLAGS (update_subrange_vec_dec (w__1) (11) (11) ((('b"0")  : mword 1)))
+      ((read_reg rflags)  : M (mword 64)) >>= fun (w__0 : mword 64) =>
+      write_reg rflags (update_subrange_vec_dec (w__0) (0) (0) ((('b"0")  : mword 1))) >>
+      ((read_reg rflags)  : M (mword 64)) >>= fun (w__1 : mword 64) =>
+      write_reg rflags (update_subrange_vec_dec (w__1) (11) (11) ((('b"0")  : mword 1)))
        : M (unit)
     else
-      ((read_reg RFLAGS)  : M (mword 64)) >>= fun (w__2 : mword 64) =>
-      write_reg RFLAGS (update_subrange_vec_dec (w__2) (0) (0) ((('b"1")  : mword 1))) >>
-      ((read_reg RFLAGS)  : M (mword 64)) >>= fun (w__3 : mword 64) =>
-      write_reg RFLAGS (update_subrange_vec_dec (w__3) (11) (11) ((('b"1")  : mword 1)))
+      ((read_reg rflags)  : M (mword 64)) >>= fun (w__2 : mword 64) =>
+      write_reg rflags (update_subrange_vec_dec (w__2) (0) (0) ((('b"1")  : mword 1))) >>
+      ((read_reg rflags)  : M (mword 64)) >>= fun (w__3 : mword 64) =>
+      write_reg rflags (update_subrange_vec_dec (w__3) (11) (11) ((('b"1")  : mword 1)))
        : M (unit))
     : M (unit).
 
 Definition execute_JMP (rel8 : mword 8) : M (unit) :=
    let displacement := sign_extend (rel8) (64) in
-   ((read_reg RIP)  : M (mword 64)) >>= fun (w__0 : mword 64) =>
-   write_reg RIP (add_vec (w__0) (displacement))
+   ((read_reg rip)  : M (mword 64)) >>= fun (w__0 : mword 64) =>
+   write_reg rip (add_vec (w__0) (displacement))
     : M (unit).
 
 Definition execute_JNE (rel8 : mword 8) : M (unit) :=
-   ((read_reg RFLAGS)  : M (mword 64)) >>= fun (w__0 : mword 64) =>
-   (if eq_vec ((_get_rflags_ZF (w__0))) ((('b"0")  : mword 1)) return M (unit) then
+   ((read_reg rflags)  : M (mword 64)) >>= fun (w__0 : mword 64) =>
+   (if eq_vec ((_get_rflags_type_ZF (w__0))) ((('b"0")  : mword 1)) return M (unit) then
       (execute_JMP (rel8))
        : M (unit)
     else returnM (tt))
     : M (unit).
 
 Definition execute_JNS (rel8 : mword 8) : M (unit) :=
-   ((read_reg RFLAGS)  : M (mword 64)) >>= fun (w__0 : mword 64) =>
-   (if eq_vec ((_get_rflags_SF (w__0))) ((('b"0")  : mword 1)) return M (unit) then
+   ((read_reg rflags)  : M (mword 64)) >>= fun (w__0 : mword 64) =>
+   (if eq_vec ((_get_rflags_type_SF (w__0))) ((('b"0")  : mword 1)) return M (unit) then
       (execute_JMP (rel8))
        : M (unit)
     else returnM (tt))
     : M (unit).
 
 Definition execute_LEAVE (operand_size : Z) (*member_Z_list operand_size [16; 64]*) : M (unit) :=
-   ((read_reg RBP)  : M (mword 64)) >>= fun (w__0 : mword 64) =>
-   write_reg RSP w__0 >>
-   ((read_reg RSP)  : M (mword 64)) >>= fun (w__1 : mword 64) =>
+   ((read_reg rbp)  : M (mword 64)) >>= fun (w__0 : mword 64) =>
+   write_reg rsp w__0 >>
+   ((read_reg rsp)  : M (mword 64)) >>= fun (w__1 : mword 64) =>
    (read_rm_operand_without_lock (operand_size) ((rm_MEM (w__1)))) >>= fun popped_value =>
    (write_GPR (operand_size) ((REG_NORMAL (5))) (popped_value)) >>
-   ((read_reg RSP)  : M (mword 64)) >>= fun (w__2 : mword 64) =>
-   write_reg RSP (add_vec_int (w__2) ((Z.quot (operand_size) (8))))
+   ((read_reg rsp)  : M (mword 64)) >>= fun (w__2 : mword 64) =>
+   write_reg rsp (add_vec_int (w__2) ((Z.quot (operand_size) (8))))
     : M (unit).
 
 Definition execute_LFENCE '(tt : unit) : M (unit) := (sail_barrier (Barrier_LFENCE))  : M (unit).
@@ -1482,11 +1484,11 @@ Definition execute_POP (operand_size : Z) (dest : rm_operand)
       (fail ("dest size for POP operation not implemented in this model"))
        : M (unit)
     else returnM (tt)) >>
-   ((read_reg RSP)  : M (mword 64)) >>= fun (w__0 : mword 64) =>
+   ((read_reg rsp)  : M (mword 64)) >>= fun (w__0 : mword 64) =>
    (read_rm_operand_without_lock (64) ((rm_MEM (w__0)))) >>= fun popped_val =>
    (write_rm_operand_without_lock (64) (dest) (popped_val)) >>
-   ((read_reg RSP)  : M (mword 64)) >>= fun (w__1 : mword 64) =>
-   write_reg RSP (add_vec_int (w__1) (8))
+   ((read_reg rsp)  : M (mword 64)) >>= fun (w__1 : mword 64) =>
+   write_reg rsp (add_vec_int (w__1) (8))
     : M (unit).
 
 Definition execute_PUSH (operand_size : Z) (src : rmi_operand)
@@ -1514,19 +1516,19 @@ Definition execute_PUSH (operand_size : Z) (src : rmi_operand)
    end >>
    (read_rmi_operand_without_lock (operand_size) (src)) >>= fun w__0 =>
    let src_val := sign_extend (w__0) (64) in
-   ((read_reg RSP)  : M (mword 64)) >>= fun (w__1 : mword 64) =>
-   write_reg RSP (sub_vec (w__1) ((zero_extend (((Ox"8")  : mword 4)) (64)))) >>
-   ((read_reg RSP)  : M (mword 64)) >>= fun (w__2 : mword 64) =>
+   ((read_reg rsp)  : M (mword 64)) >>= fun (w__1 : mword 64) =>
+   write_reg rsp (sub_vec (w__1) ((zero_extend (((Ox"8")  : mword 4)) (64)))) >>
+   ((read_reg rsp)  : M (mword 64)) >>= fun (w__2 : mword 64) =>
    let dest_address := rm_MEM (w__2) in
    (write_rm_operand_without_lock (64) (dest_address) (src_val))
     : M (unit).
 
 Definition execute_RET '(tt : unit) : M (unit) :=
-   ((read_reg RSP)  : M (mword 64)) >>= fun (w__0 : mword 64) =>
+   ((read_reg rsp)  : M (mword 64)) >>= fun (w__0 : mword 64) =>
    (read_rm_operand_without_lock (64) ((rm_MEM (w__0)))) >>= fun (w__1 : mword 64) =>
-   write_reg RIP w__1 >>
-   ((read_reg RSP)  : M (mword 64)) >>= fun (w__2 : mword 64) =>
-   write_reg RSP (add_vec_int (w__2) (8))
+   write_reg rip w__1 >>
+   ((read_reg rsp)  : M (mword 64)) >>= fun (w__2 : mword 64) =>
+   write_reg rsp (add_vec_int (w__2) (8))
     : M (unit).
 
 Definition execute_SFENCE '(tt : unit) : M (unit) := (sail_barrier (Barrier_SFENCE))  : M (unit).
@@ -1580,10 +1582,10 @@ Definition execute_XOR (lock : bool) (operand_size : Z) (dest : rm_operand) (src
    (read_rmi_operand_with_lock (false) (operand_size) (src)) >>= fun src_val =>
    let result' := xor_vec (dest_val) (src_val) in
    (write_rm_operand_with_lock (lock) (operand_size) (dest) (result')) >>
-   ((read_reg RFLAGS)  : M (mword 64)) >>= fun (w__0 : mword 64) =>
-   write_reg RFLAGS (update_subrange_vec_dec (w__0) (11) (11) ((('b"0")  : mword 1))) >>
-   ((read_reg RFLAGS)  : M (mword 64)) >>= fun (w__1 : mword 64) =>
-   write_reg RFLAGS (update_subrange_vec_dec (w__1) (0) (0) ((('b"0")  : mword 1))) >>
+   ((read_reg rflags)  : M (mword 64)) >>= fun (w__0 : mword 64) =>
+   write_reg rflags (update_subrange_vec_dec (w__0) (11) (11) ((('b"0")  : mword 1))) >>
+   ((read_reg rflags)  : M (mword 64)) >>= fun (w__1 : mword 64) =>
+   write_reg rflags (update_subrange_vec_dec (w__1) (0) (0) ((('b"0")  : mword 1))) >>
    (update_sign_flag ((length_mword (src_val))) (result')) >>
    (update_zero_flag ((length_mword (src_val))) (result')) >>
    (update_parity_flag (result'))
@@ -1615,10 +1617,10 @@ Definition execute (merge_var : ast) : M (unit) :=
     : M (unit).
 
 Definition fetch_execute '(tt : unit) : M (unit) :=
-   ((read_reg RIP)  : M (mword 64)) >>= fun (w__0 : mword 64) =>
+   ((read_reg rip)  : M (mword 64)) >>= fun (w__0 : mword 64) =>
    (decode (w__0)) >>= fun decoded =>
    match decoded with
-   | Some (new_RIP, instr) => write_reg RIP new_RIP >> (execute (instr))  : M (unit)
+   | Some (new_RIP, instr) => write_reg rip new_RIP >> (execute (instr))  : M (unit)
    | None =>
       (fail ("Instruction is either not implemented in this model, reserved, or malformed."))
        : M (unit)
@@ -1627,40 +1629,40 @@ Definition fetch_execute '(tt : unit) : M (unit) :=
 
 Definition initialize_registers '(tt : unit) : M (unit) :=
    (undefined_bitvector (64)) >>= fun (w__0 : mword 64) =>
-   write_reg RIP w__0 >>
+   write_reg rip w__0 >>
    (undefined_bitvector (64)) >>= fun (w__1 : mword 64) =>
-   write_reg RAX w__1 >>
+   write_reg rax w__1 >>
    (undefined_bitvector (64)) >>= fun (w__2 : mword 64) =>
-   write_reg RCX w__2 >>
+   write_reg rcx w__2 >>
    (undefined_bitvector (64)) >>= fun (w__3 : mword 64) =>
-   write_reg RDX w__3 >>
+   write_reg rdx w__3 >>
    (undefined_bitvector (64)) >>= fun (w__4 : mword 64) =>
-   write_reg RBX w__4 >>
+   write_reg rbx w__4 >>
    (undefined_bitvector (64)) >>= fun (w__5 : mword 64) =>
-   write_reg RSP w__5 >>
+   write_reg rsp w__5 >>
    (undefined_bitvector (64)) >>= fun (w__6 : mword 64) =>
-   write_reg RBP w__6 >>
+   write_reg rbp w__6 >>
    (undefined_bitvector (64)) >>= fun (w__7 : mword 64) =>
-   write_reg RSI w__7 >>
+   write_reg rsi w__7 >>
    (undefined_bitvector (64)) >>= fun (w__8 : mword 64) =>
-   write_reg RDI w__8 >>
+   write_reg rdi w__8 >>
    (undefined_bitvector (64)) >>= fun (w__9 : mword 64) =>
-   write_reg R8 w__9 >>
+   write_reg r8 w__9 >>
    (undefined_bitvector (64)) >>= fun (w__10 : mword 64) =>
-   write_reg R9 w__10 >>
+   write_reg r9 w__10 >>
    (undefined_bitvector (64)) >>= fun (w__11 : mword 64) =>
-   write_reg R10 w__11 >>
+   write_reg r10 w__11 >>
    (undefined_bitvector (64)) >>= fun (w__12 : mword 64) =>
-   write_reg R11 w__12 >>
+   write_reg r11 w__12 >>
    (undefined_bitvector (64)) >>= fun (w__13 : mword 64) =>
-   write_reg R12 w__13 >>
+   write_reg r12 w__13 >>
    (undefined_bitvector (64)) >>= fun (w__14 : mword 64) =>
-   write_reg R13 w__14 >>
+   write_reg r13 w__14 >>
    (undefined_bitvector (64)) >>= fun (w__15 : mword 64) =>
-   write_reg R14 w__15 >>
+   write_reg r14 w__15 >>
    (undefined_bitvector (64)) >>= fun (w__16 : mword 64) =>
-   write_reg R15 w__16 >>
-   (undefined_rflags (tt)) >>= fun (w__17 : mword 64) => write_reg RFLAGS w__17  : M (unit).
+   write_reg r15 w__16 >>
+   (undefined_rflags_type (tt)) >>= fun (w__17 : mword 64) => write_reg rflags w__17  : M (unit).
 
 Definition sail_model_init (_ : unit) : M (unit) := (initialize_registers (tt))  : M (unit).
 

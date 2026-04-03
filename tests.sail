@@ -34,12 +34,12 @@ function cmp_jns() -> unit = {
   execute(CMP(32, rm_REG(REG_NORMAL(0)), rmi_IMM(IMM32(0x5555_5555))));
   assert(rflags[SF] == 1, "CMP does not set sign flag correctly");
   // jns test
-  let current_RIP = rip;
+  let current_rip = rip;
   execute(JNS(0x34));
-  assert(rip == current_RIP, "JNS performs a jump when the sign is set");
+  assert(rip == current_rip, "JNS performs a jump when the sign is set");
   rflags[SF] = 0b0;
   execute(JNS(0x34));
-  assert(rip == add_bits(current_RIP, sail_sign_extend(0x34, 64)), "JNS does not perform a correct jump when the sign is cleared");
+  assert(rip == add_bits(current_rip, sail_sign_extend(0x34, 64)), "JNS does not perform a correct jump when the sign is cleared");
 }
 
 function cmp_jne() -> unit = {
@@ -48,24 +48,24 @@ function cmp_jne() -> unit = {
   execute(CMP(32, rm_REG(REG_NORMAL(0)), rmi_IMM(IMM32(0x4444_4444))));
   assert(rflags[ZF] == 1, "CMP does not set zero flag correctly");
   // jne test
-  let current_RIP = rip;
+  let current_rip = rip;
   execute(JNE(0x34));
-  assert(rip == current_RIP, "JNE performs a jump when the zero flag is set");
+  assert(rip == current_rip, "JNE performs a jump when the zero flag is set");
   rflags[ZF] = 0b0;
   execute(JNE(0x34));
-  assert(rip == add_bits(current_RIP, sail_sign_extend(0x34, 64)), "JNE does not perform a correct jump when the zero flag is cleared");
+  assert(rip == add_bits(current_rip, sail_sign_extend(0x34, 64)), "JNE does not perform a correct jump when the zero flag is cleared");
 }
 
 function push_pop() -> unit = {
-  let RSP1 = rsp;
+  let rsp1 = rsp;
   // push test
   let operand_size1 = 16;
   execute(PUSH(operand_size1, rmi_IMM(IMM16(0xF0F0))));
-  assert(rsp + 8 == RSP1, "PUSH does not correctly change stack pointer");
+  assert(rsp + 8 == rsp1, "PUSH does not correctly change stack pointer");
   assert(read_operand(64, rm_MEM(rsp)) == sail_sign_extend(0xF0F0, 64), "PUSH does not push the correct value to the top of the stack");
   // pop test
   execute(POP(64, rm_REG(REG_NORMAL(15))));
-  assert(rsp == RSP1, "POP does not correctly change stack pointer");
+  assert(rsp == rsp1, "POP does not correctly change stack pointer");
   assert(read_GPR(64, REG_NORMAL(15)) == sail_sign_extend(0xF0F0, 64), "POP does not put the correct value in the destination")
 }
 
@@ -101,16 +101,16 @@ function call_leave_ret() -> unit = {
   // call test
   rsp = 0x0000_0000_0000_ABC8;
   rip = 0xFFFF_0000_0000_0000;
-  let original_RIP = rip;
-  let original_RSP = rsp;
+  let original_rip = rip;
+  let original_rsp = rsp;
   execute(CALL(0xFEFE_FEFE));
   assert(rsp == 0x0000_0000_0000_ABC0, "CALL instruction does not decrement rsp correctly (when pushing a value to the stack)");
-  assert(read_operand(64, rm_MEM(rsp)) == original_RIP, "CALL instruction puts incorrect value at the top of the stack");
-  assert(rip == add_bits(original_RIP, sail_sign_extend(0xFEFE_FEFE, 64)), "CALL instruction does not change rip correctly");
+  assert(read_operand(64, rm_MEM(rsp)) == original_rip, "CALL instruction puts incorrect value at the top of the stack");
+  assert(rip == add_bits(original_rip, sail_sign_extend(0xFEFE_FEFE, 64)), "CALL instruction does not change rip correctly");
 
   // "push" and "mov" instructions used to test "leave" and "ret"
-  let old_RBP = rbp;
-  let old_RSP = rsp;
+  let old_rbp = rbp;
+  let old_rsp = rsp;
   // push rbp value to the stack
   execute(PUSH(64, rmi_REG(REG_NORMAL(5)))); // 5 is the reg_index for rbp
   // copy rsp value into rbp register
@@ -118,19 +118,19 @@ function call_leave_ret() -> unit = {
 
   // leave test
   execute(LEAVE(64));
-  assert(rsp == old_RSP, "LEAVE instruction does not increment rsp correctly (when popping from the stack)");
-  assert(rbp == old_RBP, "LEAVE instruction does not pop correct item from the stack into rbp");
+  assert(rsp == old_rsp, "LEAVE instruction does not increment rsp correctly (when popping from the stack)");
+  assert(rbp == old_rbp, "LEAVE instruction does not pop correct item from the stack into rbp");
 
   // ret test
   execute(RET());
-  assert(rsp == original_RSP, "RET instruction does not increment rsp correctly (when popping from the stack)");
-  assert(rip == original_RIP, "RET instruction does not pop correct item from the stack into rip");
+  assert(rsp == original_rsp, "RET instruction does not increment rsp correctly (when popping from the stack)");
+  assert(rip == original_rip, "RET instruction does not pop correct item from the stack into rip");
 }
 
 function jmp() -> unit = {
-  let current_RIP = rip;
+  let current_rip = rip;
   execute(JMP(0xFF));
-  assert(rip == add_bits(current_RIP, sail_sign_extend(0xFF, 64)), "JMP does not perform a correct jump");
+  assert(rip == add_bits(current_rip, sail_sign_extend(0xFF, 64)), "JMP does not perform a correct jump");
 }
 
 function test_execute() -> unit = {
@@ -168,7 +168,7 @@ function write_instruction_to_memory(m, inst, instruction_ptr) = {
 val unwrap_decoded_instr: option((bits(64), ast)) -> (bits(64), ast)
 function unwrap_decoded_instr(res) = {
   match res {
-    Some(new_RIP, instr) => (new_RIP, instr),
+    Some(new_rip, instr) => (new_rip, instr),
     None() => {
       fail("Instruction not decodable by the model")
     }

@@ -366,7 +366,7 @@ Definition update_parity_flag {m : Z} (result' : mword m) (*m >=? 8*) : M (unit)
      (update_subrange_vec_dec (w__0) (2) (2) ((vec_of_bits [even_parity]  : mword 1)))
     : M (unit).
 
-Definition update_RFLAGS_sub {m : Z} (first : mword m) (second : mword m) (result' : mword m)
+Definition update_rflags_sub {m : Z} (first : mword m) (second : mword m) (result' : mword m)
 (*m >=? 8*)
 : M (unit) :=
    (update_sign_flag m (result')) >>
@@ -375,7 +375,7 @@ Definition update_RFLAGS_sub {m : Z} (first : mword m) (second : mword m) (resul
    (update_zero_flag m (result')) >>
    (update_aux_carry_flag_sub (first) (second)) >> (update_parity_flag (result'))  : M (unit).
 
-Definition update_RFLAGS_add {m : Z} (first : mword m) (second : mword m) (result' : mword m)
+Definition update_rflags_add {m : Z} (first : mword m) (second : mword m) (result' : mword m)
 (*m >=? 8*)
 : M (unit) :=
    (update_sign_flag m (result')) >>
@@ -1365,7 +1365,7 @@ Definition execute_ADD (lock : bool) (operand_size : Z) (dest : rm_operand) (src
    (read_rmi_operand_with_lock (false) (operand_size) (src)) >>= fun src_val =>
    let result' := add_vec (dest_val) (src_val) in
    (write_rm_operand_with_lock (lock) (operand_size) (dest) (result')) >>
-   (update_RFLAGS_add (dest_val) (src_val) (result'))
+   (update_rflags_add (dest_val) (src_val) (result'))
     : M (unit).
 
 Definition execute_CALL (rel32 : mword 32) : M (unit) :=
@@ -1391,7 +1391,7 @@ Definition execute_CMP (operand_size : Z) (first : rm_operand) (second : rmi_ope
    (read_rm_operand_without_lock (operand_size) (first)) >>= fun first_val =>
    (read_rmi_operand_without_lock (operand_size) (second)) >>= fun second_val =>
    let result' := sub_vec (first_val) (second_val) in
-   (update_RFLAGS_sub (first_val) (second_val) (result'))
+   (update_rflags_sub (first_val) (second_val) (result'))
     : M (unit).
 
 Definition execute_IMUL (operand_size : Z) (dest : Z) (src : rm_operand)
@@ -1556,7 +1556,7 @@ Definition execute_SUB (lock : bool) (operand_size : Z) (dest : rm_operand) (src
    (read_rmi_operand_with_lock (false) (operand_size) (src)) >>= fun src_val =>
    let result' := sub_vec (dest_val) (src_val) in
    (write_rm_operand_with_lock (lock) (operand_size) (dest) (result')) >>
-   (update_RFLAGS_sub (dest_val) (src_val) (result'))
+   (update_rflags_sub (dest_val) (src_val) (result'))
     : M (unit).
 
 Definition execute_XOR (lock : bool) (operand_size : Z) (dest : rm_operand) (src : rmi_operand)
@@ -1620,7 +1620,7 @@ Definition fetch_execute '(tt : unit) : M (unit) :=
    ((read_reg rip)  : M (mword 64)) >>= fun (w__0 : mword 64) =>
    (decode (w__0)) >>= fun decoded =>
    match decoded with
-   | Some (new_RIP, instr) => write_reg rip new_RIP >> (execute (instr))  : M (unit)
+   | Some (new_rip, instr) => write_reg rip new_rip >> (execute (instr))  : M (unit)
    | None =>
       (fail ("Instruction is either not implemented in this model, reserved, or malformed."))
        : M (unit)

@@ -9,8 +9,8 @@ val fetch_execute: unit -> unit
 function fetch_execute() = {
     let decoded = decode(rip);
     match decoded {
-        Some(new_RIP, instr) => {
-            rip = new_RIP;
+        Some(new_rip, instr) => {
+            rip = new_rip;
             execute(instr)
         },
         None() => {
@@ -351,7 +351,7 @@ function clause execute(CMP(operand_size, first, second)) = {
     let result = sub_bits(first_val, second_val);
 
     /* change value of status flags. Equivalent to the changes made on executing the SUB instruction. */
-    update_RFLAGS_sub(first_val, second_val, result);
+    update_rflags_sub(first_val, second_val, result);
 }
 
 // Decode CMP r/m8, r8
@@ -565,7 +565,7 @@ function clause execute(ADD(lock, operand_size, dest, src)) = {
     write_operand(lock, operand_size, dest, result);
 
     /* change value of status flags */
-    update_RFLAGS_add(dest_val, src_val, result);
+    update_rflags_add(dest_val, src_val, result);
 }
 
 // Decode ADD r/m8, r8
@@ -629,7 +629,7 @@ function clause execute(SUB(lock, operand_size, dest, src)) = {
     write_operand(lock, operand_size, dest, result);
 
     /* change value of status flags */
-    update_RFLAGS_sub(dest_val, src_val, result);
+    update_rflags_sub(dest_val, src_val, result);
 }
 
 // Decode SUB r/m8, r8

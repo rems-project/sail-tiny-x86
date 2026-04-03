@@ -193,8 +193,8 @@ function update_parity_flag(result) = {
 
 /* Update rflags for sub and add operations */
 
-val update_RFLAGS_sub: forall 'm, 'm >=8. (bits('m), bits('m), bits('m)) -> unit
-function update_RFLAGS_sub(first, second, result) = {
+val update_rflags_sub: forall 'm, 'm >=8. (bits('m), bits('m), bits('m)) -> unit
+function update_rflags_sub(first, second, result) = {
     update_sign_flag(result);
     update_overflow_flag_sub(first, second, result);
     update_carry_flag_sub(first, second);
@@ -203,8 +203,8 @@ function update_RFLAGS_sub(first, second, result) = {
     update_parity_flag(result);
 }
 
-val update_RFLAGS_add: forall 'm, 'm >=8. (bits('m), bits('m), bits('m)) -> unit
-function update_RFLAGS_add(first, second, result) = {
+val update_rflags_add: forall 'm, 'm >=8. (bits('m), bits('m), bits('m)) -> unit
+function update_rflags_add(first, second, result) = {
     update_sign_flag(result);
     update_overflow_flag_add(first, second, result);
     update_carry_flag_add(first, second);

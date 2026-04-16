@@ -215,15 +215,14 @@ function test_decode_mov_r8_rm8() -> unit = {
 }
 
 function test_decode_mov_r64_rm64() -> unit = {
-  // Testing that MOV r12, M(r13) is decoded correctly
+  // Testing that MOV r12, M(32-bit-displacement) is decoded correctly
   let old_rip = rip;
-  let instruction: bits(24) = 0b0100_1101 @ 0x8B @ 0b00_100_101;
+  let instruction: bits(56) = 0b0100_1101 @ 0x8B @ 0b00_100_101 @ 0x6666_6666;
   write_instruction_to_memory(instruction, rip);
-  write_GPR(64, REG_NORMAL(5 + 8), 0xFEDC_BA98_7654_3210);
   let (new_rip, decoded_instruction) = unwrap_decoded_instr(decode(rip));
   rip = new_rip;
-  assert(unsigned(new_rip) - unsigned(old_rip) == 3, "MOV(r64, rm64): Wrong instruction length has been read");
-  let expected_rmi_MEM = read_GPR(64, REG_NORMAL(5 + 8));
+  assert(unsigned(new_rip) - unsigned(old_rip) == 7, "MOV(r64, rm64): Wrong instruction length has been read");
+  let expected_rmi_MEM = add_bits(old_rip, sail_sign_extend(0x6666_6666, 64));
   assert(decoded_instruction == MOV(64, rm_REG(REG_NORMAL(4 + 8)), rmi_MEM(expected_rmi_MEM)), "MOV(r64, rm64) instruction not decoded properly");
 }
 

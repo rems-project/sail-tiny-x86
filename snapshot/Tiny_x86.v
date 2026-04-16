@@ -793,14 +793,33 @@ Definition get_reg_value_in_opcode_byte (reg_field : mword 3) (REX : mword 8) : 
    if eq_vec ((_get_REX_B (REX))) ((('b"1")  : mword 1)) then Z.add (8) (base_reg_loc)
    else base_reg_loc.
 
-Definition decode_sib_byte (sib_byte : mword 8) (REX : mword 8) : M (mword 64) :=
+Definition read_sib_byte (instruction_ptr : mword 64) (read_offset : Z) : M ((Z * mword 8)) :=
+   (read_memory (1) ((add_vec_int (instruction_ptr) (read_offset)))
+      ((create_iFetchAccessDescriptor (tt)))) >>= fun (sib_byte : SIBByte) =>
+   returnM ((Z.add (read_offset) (1), sib_byte)).
+
+Definition decode_sib_byte
+(instruction_ptr : mword 64) (read_offset : Z) (REX : mword 8) (mod_rm_byte : mword 8)
+: M ((Z * mword 64)) :=
+   (read_sib_byte (instruction_ptr) (read_offset)) >>= fun '((new_read_offset, sib_byte)) =>
    let sib_byte_BASE := get_sib_byte_BASE (sib_byte) (REX) in
    let sib_byte_INDEX := get_sib_byte_INDEX (sib_byte) (REX) in
-   (if Z.eqb (sib_byte_BASE) (5) then returnM ((zero_extend (((Ox"0")  : mword 4)) (64)))
-    else (read_GPR (64) ((REG_NORMAL (sib_byte_BASE))))  : M (mword 64)) >>= fun base =>
    (if Z.eqb (sib_byte_INDEX) (4) then returnM ((zero_extend (((Ox"0")  : mword 4)) (64)))
     else (read_GPR (64) ((REG_NORMAL (sib_byte_INDEX))))  : M (mword 64)) >>= fun index =>
-   returnM ((add_vec (base) ((shiftl (index) ((uint ((_get_SIBByte_Scale (sib_byte))))))))).
+   let scaled_index := shiftl (index) ((uint ((_get_SIBByte_Scale (sib_byte))))) in
+   let three_bit_base_reg := mod' (sib_byte_BASE) (8) in
+   (if andb ((Z.eqb (three_bit_base_reg) (5)))
+         ((eq_vec ((_get_modRMByte_Mod (mod_rm_byte))) ((('b"00")  : mword 2))))
+      return
+      M ((Z * mword 64)) then
+      (read_memory (4) ((add_vec_int (instruction_ptr) (new_read_offset)))
+         ((create_iFetchAccessDescriptor (tt)))) >>= fun displacement =>
+      let decoded_sib := add_vec (scaled_index) ((sign_extend (displacement) (64))) in
+      returnM ((Z.add (new_read_offset) (4), decoded_sib))
+    else
+      (read_GPR (64) ((REG_NORMAL (sib_byte_BASE)))) >>= fun base =>
+      returnM ((new_read_offset, add_vec (base) (scaled_index))))
+    : M ((Z * mword 64)).
 
 Definition read_mod_rm_byte (instruction_ptr : mword 64) (read_offset : Z) : M ((Z * mword 8)) :=
    (read_memory (1) ((add_vec_int (instruction_ptr) (read_offset)))
@@ -825,7 +844,7 @@ Definition read_imm_operand (instruction_ptr : mword 64) (read_offset : Z) (oper
 (*member_Z_list operand_size [8; 16; 32; 64]*)
 : M ((Z * imm)) :=
    let operand_size_bytes := Z.quot (operand_size) (8) in
-   assert_exp' (Z.eqb (operand_size) ((Z.mul (8) (operand_size_bytes)))) "decode.sail:221.49-221.50" >>= fun _ =>
+   assert_exp' (Z.eqb (operand_size) ((Z.mul (8) (operand_size_bytes)))) "decode.sail:242.49-242.50" >>= fun _ =>
    (read_memory (operand_size_bytes) ((add_vec_int (instruction_ptr) (read_offset)))
       ((create_iFetchAccessDescriptor (tt)))) >>= fun imm_value =>
    let l__0 := operand_size in
@@ -858,19 +877,27 @@ Definition decode_rm_operand_inner
          returnM ((read_offset, rm_REG (wrapped_reg)))
        else
          let new_read_offset : Z := read_offset in
-         let three_bit_reg_used := mod' (reg_used) (8) in
-         (if Z.eqb (three_bit_reg_used) (4) return M ((mword 64 * Z)) then
-            (read_memory (1) ((add_vec_int (instruction_ptr) (new_read_offset)))
-               ((create_iFetchAccessDescriptor (tt)))) >>= fun (sib_byte : SIBByte) =>
-            (decode_sib_byte (sib_byte) (REX)) >>= fun sib_value =>
-            let new_read_offset : Z := Z.add (new_read_offset) (1) in
+         let three_bit_rm_reg := mod' (reg_used) (8) in
+         (if Z.eqb (three_bit_rm_reg) (4) return M ((mword 64 * Z)) then
+            (decode_sib_byte (instruction_ptr) (new_read_offset) (REX) (mod_rm_byte)) >>= fun '((sib_read_offset, sib_value)) =>
+            let new_read_offset : Z := sib_read_offset in
             returnM ((sib_value, new_read_offset))
           else
             (read_GPR (64) ((REG_NORMAL (reg_used)))) >>= fun (w__0 : mword 64) =>
             returnM ((w__0, new_read_offset))) >>= fun '((mem_loc, new_read_offset)
          : (mword 64 * Z)) =>
          let b__0 := _get_modRMByte_Mod (mod_rm_byte) in
-         (if eq_vec (b__0) ((('b"01")  : mword 2)) return M ((mword 64 * Z)) then
+         (if eq_vec (b__0) ((('b"00")  : mword 2)) return M ((mword 64 * Z)) then
+            (if Z.eqb (three_bit_rm_reg) (5) return M ((mword 64 * Z)) then
+               (read_memory (4) ((add_vec_int (instruction_ptr) (new_read_offset)))
+                  ((create_iFetchAccessDescriptor (tt)))) >>= fun displacement =>
+               ((read_reg rip)  : M (mword 64)) >>= fun (w__1 : mword 64) =>
+               let mem_loc := (add_vec (w__1) ((sign_extend (displacement) (64))))  : mword 64 in
+               let new_read_offset : Z := Z.add (new_read_offset) (4) in
+               returnM ((mem_loc, new_read_offset))
+             else returnM ((mem_loc, new_read_offset)))
+             : M ((mword 64 * Z))
+          else if eq_vec (b__0) ((('b"01")  : mword 2)) return M ((mword 64 * Z)) then
             (read_memory (1) ((add_vec_int (instruction_ptr) (new_read_offset)))
                ((create_iFetchAccessDescriptor (tt)))) >>= fun displacement =>
             let mem_loc : bits 64 := add_vec (mem_loc) ((sign_extend (displacement) (64))) in

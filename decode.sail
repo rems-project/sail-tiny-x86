@@ -166,24 +166,45 @@ function get_reg_value_in_opcode_byte(reg_field, REX) = {
     if REX[B] == 0b1 then 8 + base_reg_loc else base_reg_loc
 }
 
+val read_sib_byte: (bits(64), int) -> (int, SIBByte)
+function read_sib_byte(instruction_ptr, read_offset) = {
+    let sib_byte: SIBByte = struct {
+        bits = read_memory(1, instruction_ptr + read_offset, create_iFetchAccessDescriptor())
+    };
+    (read_offset + 1, sib_byte)
+}
+
 // Decode SIB byte (sometimes needed for decoding register or memory operands)
-val decode_sib_byte: (SIBByte, REX) -> bits(64)
-function decode_sib_byte(sib_byte, REX) = {
-    // value stored in the SIB byte is base + index * (2^scale)
-    /* Note: if the value stored in the base or index fields of the SIB byte is 5, 
-    then we can't read the value stored in this register location, as the index is of the rbp,*/
+val decode_sib_byte: (bits(64), int, REX, modRMByte) -> (int, bits(64))
+function decode_sib_byte(instruction_ptr, read_offset, REX, mod_rm_byte) = {
+    // read SIB byte. Value stored in the SIB byte is usually base + index * (2^scale)
+    let (new_read_offset, sib_byte) = read_sib_byte(instruction_ptr, read_offset);
     let sib_byte_BASE = get_sib_byte_BASE(sib_byte, REX);
     let sib_byte_INDEX = get_sib_byte_INDEX(sib_byte, REX);
-    let base = if sib_byte_BASE == 5 then sail_zero_extend(0x0, 64) else {
-        // base = value stored in this register location
-        read_GPR(64, REG_NORMAL(sib_byte_BASE))
-    };
+    // rsp cannot be used as an index register
     let index = if sib_byte_INDEX == 4 then sail_zero_extend(0x0, 64) else {
         // index = value stored in this register location
         read_GPR(64, REG_NORMAL(sib_byte_INDEX))
     };
-    // return the value stored in the SIB byte, which is base + index * (2^scale)
-    add_bits(base, sail_shiftleft(index, unsigned(sib_byte[Scale])))
+    let scaled_index = sail_shiftleft(index, unsigned(sib_byte[Scale]));
+
+    // Handle strange case first
+    let three_bit_base_reg = mod(sib_byte_BASE, 8);
+    if three_bit_base_reg == 5 & mod_rm_byte[Mod] == 0b00 then {
+        // our decoded value is scaled_index + a sign-extended 32-bit displacement
+        // fetch the 32 bit (4 byte) displacement
+        let displacement = read_memory(4, instruction_ptr + new_read_offset, create_iFetchAccessDescriptor());
+        // calculate the decoded value
+        let decoded_sib = add_bits(scaled_index, sail_sign_extend(displacement, 64));
+        (new_read_offset + 4, decoded_sib)
+    }
+    // Handle normal case
+    else {
+        // base = value stored in this register location
+        let base = read_GPR(64, REG_NORMAL(sib_byte_BASE));
+        // return the value stored in the SIB byte, which is base + scaled_index
+        (new_read_offset, add_bits(base, scaled_index))
+    };
 }
 
 val read_mod_rm_byte: (bits(64), int) -> (int, modRMByte)
@@ -256,19 +277,15 @@ function clause decode_rm_operand_inner(addressingMethod_E, instruction_ptr, rea
     else {
         // the mod and r/m bits are used to specify a memory location
         var new_read_offset: int = read_offset;
+        // get original 3-bit register location stored in the mod r/m byte
+        let three_bit_rm_reg = mod(reg_used, 8);
         var mem_loc: bits(64) = {
-            // get original 3-bit register location stored in the mod r/m byte
-            let three_bit_reg_used = mod(reg_used, 8) in
-            if three_bit_reg_used == 4 then { 
-                // this register value means that we need to decode the SIB byte
-                let sib_byte: SIBByte = struct {
-                    // read SIB byte
-                    bits = read_memory(1, instruction_ptr + new_read_offset, create_iFetchAccessDescriptor())
-                };
-                // convert the byte to a value
-                let sib_value = decode_sib_byte(sib_byte, REX);
+            if three_bit_rm_reg == 4 then { 
+                // this register value means that we need to read and decode the SIB byte
+                let (sib_read_offset, sib_value) = 
+                    decode_sib_byte(instruction_ptr, new_read_offset, REX, mod_rm_byte);
                 // increment read_offset (add 1 to it)
-                new_read_offset = new_read_offset + 1;
+                new_read_offset = sib_read_offset;
                 // working value is set to the value stored in the SIB byte
                 sib_value
             }
@@ -276,6 +293,18 @@ function clause decode_rm_operand_inner(addressingMethod_E, instruction_ptr, rea
             else read_GPR(64, REG_NORMAL(reg_used))
         };
         match mod_rm_byte[Mod] {
+            0b00 => {
+                // Handle strange case
+                if three_bit_rm_reg == 5 then {
+                    // our mem_loc is RIP +  32-bit displacement
+                    // fetch the 32 bit (4 byte) displacement
+                    let displacement = read_memory(4, instruction_ptr + new_read_offset, create_iFetchAccessDescriptor());
+                    // sign-extend the 32 bit displacement
+                    mem_loc = add_bits(rip, sail_sign_extend(displacement, 64));
+                    // increment read offset
+                    new_read_offset = new_read_offset + 4;
+                };
+            },
             0b01 => {
                 // we need to add an 8 bit displacement value to mem_loc
                 // fetch the 8 bit displacement
@@ -294,7 +323,6 @@ function clause decode_rm_operand_inner(addressingMethod_E, instruction_ptr, rea
                 // increment read offset
                 new_read_offset = new_read_offset + 4;
             },
-            // if our mod bits are 00, then we don't add a displacement to mem_loc
             // this match statement is not reachable for mod bits = 11
             _ => () 
         };

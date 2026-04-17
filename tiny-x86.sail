@@ -403,6 +403,62 @@ function clause decode_one_byte_instruction(0x3B, instruction_ptr, read_offset, 
 
 
 /*------------------------------------------------------------------------------
+ * CMPXCHG
+ *-----------------------------------------------------------------------------*/
+
+function clause execute(CMPXCHG(lock, operand_size, dest, src)) = {
+    // CMPXCHG is not valid with lock = true if dest is a register location
+    match dest {
+        rm_REG(_) if lock => fail("Exception #UD — Invalid Opcode (Undefined Opcode): 
+            LOCK prefix cannot be applied to dest = reg"),
+        _ => ()
+    };
+
+    // Compare least significant [?] bits of rax with r/m[?]
+    let rax_portion = rax[operand_size - 1 .. 0];
+    let dest_contents = read_operand(lock, operand_size, dest);
+    if unsigned(rax_portion) == unsigned(dest_contents) then {
+        // Set ZF, then load the contents of src into dest
+        rflags[ZF] = 0b1;
+        let src_contents = read_GPR(operand_size, src);
+        write_operand(lock, operand_size, dest, src_contents)
+    }
+    else {
+        // Clear ZF, then load the contents of dest into the relevant portion of rax
+        rflags[ZF] = 0b0;
+        write_GPR(operand_size, REG_NORMAL(0), dest_contents)
+    }
+}
+
+// Decode CMPXCHG r/m8 r8
+function clause decode_two_byte_instruction(0x0FB0, instruction_ptr, read_offset, decoded_prefixes) = {
+    // get 2 operands of the addressing method + operand type: Operand 1 = Eb, Operand 2 = Gb
+    let (new_read_offset, operand1, operand2) = 
+        get_Eb_Gb_operands(instruction_ptr, read_offset, decoded_prefixes.REX);
+    // return new read offset and decoded instruction
+    match operand2 {
+        rmi_REG(reg_content) => Some(new_read_offset, 
+            CMPXCHG(decoded_prefixes.lock, 8, operand1, reg_content)),
+        _ => fail("Operand for CMPXCHG not allowed")
+    }
+    
+}
+
+// Decode CMPXCHG r/m{16,32,64} r{16,32,64}
+function clause decode_two_byte_instruction(0x0FB1, instruction_ptr, read_offset, decoded_prefixes) = {
+    // get 2 operands of the addressing method + operand type: Operand 1 = Ev, Operand 2 = Gv
+    let (new_read_offset, operand_size, operand1, operand2) = 
+        get_Ev_Gv_operands(instruction_ptr, read_offset, decoded_prefixes);
+    // return new read offset and decoded instruction
+    match operand2 {
+        rmi_REG(reg_content) => Some(new_read_offset, 
+            CMPXCHG(decoded_prefixes.lock, operand_size, operand1, reg_content)),
+        _ => fail("Operand for CMPXCHG not allowed")
+    }
+}
+
+
+/*------------------------------------------------------------------------------
  * PUSH
  *-----------------------------------------------------------------------------*/
 

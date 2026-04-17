@@ -7,6 +7,7 @@ union ast = {
     LFENCE: unit,
     MFENCE: unit,
     CMP: (operand_size, rm_operand, rmi_operand),
+    CMPXCHG: (bool, operand_size, rm_operand, reg),
     PUSH: (operand_size, rmi_operand),
     POP: (operand_size, rm_operand),
     ADD: (bool, operand_size, rm_operand, rmi_operand),

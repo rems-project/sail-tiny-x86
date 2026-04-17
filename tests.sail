@@ -133,6 +133,47 @@ function jmp() -> unit = {
   assert(rip == add_bits(current_rip, sail_sign_extend(0xFF, 64)), "JMP does not perform a correct jump");
 }
 
+function cmpxchg_eq() -> unit = {
+  let lock = false;
+  let operand_size = 64;
+  let operand_size_bytes = 8;
+  let mem_addr = sail_sign_extend(0x1000, 64);
+  let reg_loc = REG_NORMAL(1);
+  let r_operand_value = sail_sign_extend(0x65432A, 64);
+  write_GPR(operand_size, reg_loc, r_operand_value);
+
+  // set rax equal to the r/m operand
+  rax = sail_sign_extend(0x3456, 64);
+  write_memory(operand_size_bytes, mem_addr, rax, create_writeAccessDescriptor());
+
+  execute(CMPXCHG(lock, operand_size, rm_MEM(mem_addr), reg_loc));
+
+  // expect the r operand value to have been loaded into the r/m operand location
+  assert(read_memory(operand_size_bytes, mem_addr, create_readAccessDescriptor()) == r_operand_value, 
+    "CMPXCHG: value of r operand not successfully loaded into the r/m operand location");
+  assert(rflags[ZF] == 1, "CMPXCHG, ZF not set on success")
+}
+
+function cmpxchg_neq() -> unit = {
+  let lock = false;
+  let operand_size = 64;
+  let operand_size_bytes = 8;
+  let mem_addr = sail_sign_extend(0x1000, 64);
+  let mem_val = sail_sign_extend(0x1245, 64);
+  let reg_loc = REG_NORMAL(1);
+
+  // set rax equal to the r/m operand
+  rax = sail_sign_extend(0x3456, 64);
+  write_memory(operand_size_bytes, mem_addr, mem_val, create_writeAccessDescriptor());
+
+  execute(CMPXCHG(lock, operand_size, rm_MEM(mem_addr), reg_loc));
+
+  // expect the r/m operand value to be loaded into rax
+  assert(rax == mem_val, 
+    "CMPXCHG: value of r/m operand not successfully loaded into rax");
+  assert(rflags[ZF] == 0, "CMPXCHG, ZF not cleared on fail")
+}
+
 function test_execute() -> unit = {
   write_then_read_mem();
   mov_reg_to_mem();
@@ -145,6 +186,8 @@ function test_execute() -> unit = {
   multiply_2_numbers();
   call_leave_ret();
   jmp();
+  cmpxchg_eq();
+  cmpxchg_neq();
 }
 
 /*===========================================================
@@ -492,6 +535,38 @@ function test_decode_mfence() -> unit = {
 }
 
 /*===========================================================
+Decode CMPXCHG tests
+============================================================*/
+
+function test_decode_cmpxchg_rm8_r8() -> unit = {
+  // Testing that CMPXCHG m(r15 + 0x3A), AL is decoded correctly
+  let old_rip = rip;
+  let instruction: bits(40) = 0b0100_0001 @ 0x0FB0 @ 0b01_000_111 @ 0x3A;
+  write_instruction_to_memory(instruction, rip);
+  let (new_rip, decoded_instruction) = unwrap_decoded_instr(decode(rip));
+  rip = new_rip;
+  assert(unsigned(new_rip) - unsigned(old_rip) == 5, 
+    "CMPXCHG(rm8, r8): Wrong instruction length has been read");
+  let expected_mem_addr = add_bits(r15, sail_sign_extend(0x3A, 64));
+  assert(decoded_instruction == CMPXCHG(false, 8, rm_MEM(expected_mem_addr), REG_NORMAL(0)), 
+    "CMPXCHG(rm8, r8) instruction not decoded properly");
+}
+
+function test_decode_cmpxchg_rm16_r16() -> unit = {
+  // Testing that CMPXCHG m(r15 + 0x3A), AX is decoded correctly
+  let old_rip = rip;
+  let instruction: bits(56) = 0xF0 @ 0x66 @ 0b0100_0001 @ 0x0FB1 @ 0b01_000_111 @ 0x3A;
+  write_instruction_to_memory(instruction, rip);
+  let (new_rip, decoded_instruction) = unwrap_decoded_instr(decode(rip));
+  rip = new_rip;
+  assert(unsigned(new_rip) - unsigned(old_rip) == 7, 
+    "CMPXCHG(rm16, r16): Wrong instruction length has been read");
+  let expected_mem_addr = add_bits(r15, sail_sign_extend(0x3A, 64));
+  assert(decoded_instruction == CMPXCHG(true, 16, rm_MEM(expected_mem_addr), REG_NORMAL(0)), 
+    "CMPXCHG(rm16, r16) instruction not decoded properly");
+}
+
+/*===========================================================
 Decode PUSH tests
 ============================================================*/
 
@@ -509,7 +584,8 @@ function test_decode_push_imm16() -> unit = {
 
   // Test
   assert(unsigned(new_rip) - unsigned(old_rip) == 4, "PUSH(imm16): Wrong instruction length has been read");
-  assert(decoded_instruction == PUSH(16, rmi_IMM(IMM16(0x4567))), "PUSH(imm16) instruction not decoded properly");
+  assert(decoded_instruction == PUSH(16, rmi_IMM(IMM16(0x4567))), 
+    "PUSH(imm16) instruction not decoded properly");
 }
 
 function test_decode_push_m64() -> unit = {
@@ -780,6 +856,9 @@ function test_decode() -> unit = {
   test_decode_sfence();
   test_decode_lfence();
   test_decode_mfence();
+
+  test_decode_cmpxchg_rm8_r8();
+  test_decode_cmpxchg_rm16_r16();
 
   test_decode_group1_rm8_r8(TEST_CMP);
   test_decode_group1_rm16_r16(TEST_CMP);

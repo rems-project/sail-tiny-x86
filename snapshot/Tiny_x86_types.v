@@ -323,6 +323,8 @@ Inductive ast :=
 | LFENCE : unit -> ast
 | MFENCE : unit -> ast
 | CMP : (operand_size * rm_operand * rmi_operand) -> ast
+| CMPXCHG : (bool * operand_size * rm_operand * reg) -> ast
+| XCHG : (operand_size * rm_operand * reg) -> ast
 | PUSH : (operand_size * rmi_operand) -> ast
 | POP : (operand_size * rm_operand) -> ast
 | ADD : (bool * operand_size * rm_operand * rmi_operand) -> ast
@@ -343,17 +345,19 @@ Definition sail_ast_encode (x : ast) := match x with
   | LFENCE x' => encode (3, encode x')
   | MFENCE x' => encode (4, encode x')
   | CMP x' => encode (5, encode x')
-  | PUSH x' => encode (6, encode x')
-  | POP x' => encode (7, encode x')
-  | ADD x' => encode (8, encode x')
-  | SUB x' => encode (9, encode x')
-  | IMUL x' => encode (10, encode x')
-  | CALL x' => encode (11, encode x')
-  | LEAVE x' => encode (12, encode x')
-  | RET x' => encode (13, encode x')
-  | JMP x' => encode (14, encode x')
-  | JNS x' => encode (15, encode x')
-  | JNE x' => encode (16, encode x') end.
+  | CMPXCHG x' => encode (6, encode x')
+  | XCHG x' => encode (7, encode x')
+  | PUSH x' => encode (8, encode x')
+  | POP x' => encode (9, encode x')
+  | ADD x' => encode (10, encode x')
+  | SUB x' => encode (11, encode x')
+  | IMUL x' => encode (12, encode x')
+  | CALL x' => encode (13, encode x')
+  | LEAVE x' => encode (14, encode x')
+  | RET x' => encode (15, encode x')
+  | JMP x' => encode (16, encode x')
+  | JNS x' => encode (17, encode x')
+  | JNE x' => encode (18, encode x') end.
 Definition sail_ast_decode x : option ast := match decode x with
   | Some (0, x') => MOV <$> decode x'
   | Some (1, x') => XOR <$> decode x'
@@ -361,22 +365,24 @@ Definition sail_ast_decode x : option ast := match decode x with
   | Some (3, x') => LFENCE <$> decode x'
   | Some (4, x') => MFENCE <$> decode x'
   | Some (5, x') => CMP <$> decode x'
-  | Some (6, x') => PUSH <$> decode x'
-  | Some (7, x') => POP <$> decode x'
-  | Some (8, x') => ADD <$> decode x'
-  | Some (9, x') => SUB <$> decode x'
-  | Some (10, x') => IMUL <$> decode x'
-  | Some (11, x') => CALL <$> decode x'
-  | Some (12, x') => LEAVE <$> decode x'
-  | Some (13, x') => RET <$> decode x'
-  | Some (14, x') => JMP <$> decode x'
-  | Some (15, x') => JNS <$> decode x'
-  | Some (16, x') => JNE <$> decode x'
+  | Some (6, x') => CMPXCHG <$> decode x'
+  | Some (7, x') => XCHG <$> decode x'
+  | Some (8, x') => PUSH <$> decode x'
+  | Some (9, x') => POP <$> decode x'
+  | Some (10, x') => ADD <$> decode x'
+  | Some (11, x') => SUB <$> decode x'
+  | Some (12, x') => IMUL <$> decode x'
+  | Some (13, x') => CALL <$> decode x'
+  | Some (14, x') => LEAVE <$> decode x'
+  | Some (15, x') => RET <$> decode x'
+  | Some (16, x') => JMP <$> decode x'
+  | Some (17, x') => JNS <$> decode x'
+  | Some (18, x') => JNE <$> decode x'
   | _ => None end.
 Lemma sail_ast_decode_encode : forall (x : ast), sail_ast_decode (sail_ast_encode x)  = Some x.
 Proof.
   unfold sail_ast_decode, sail_ast_encode;
-  intros [x|x|x|x|x|x|x|x|x|x|x|x|x|x|x|x|x]; rewrite !decode_encode; reflexivity.
+  intros [x|x|x|x|x|x|x|x|x|x|x|x|x|x|x|x|x|x|x]; rewrite !decode_encode; reflexivity.
 Qed.
 
 #[export]

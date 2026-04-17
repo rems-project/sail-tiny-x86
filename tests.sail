@@ -136,7 +136,6 @@ function jmp() -> unit = {
 function cmpxchg_eq() -> unit = {
   let lock = false;
   let operand_size = 64;
-  let operand_size_bytes = 8;
   let mem_addr = sail_sign_extend(0x1000, 64);
   let reg_loc = REG_NORMAL(1);
   let r_operand_value = sail_sign_extend(0x65432A, 64);
@@ -144,12 +143,12 @@ function cmpxchg_eq() -> unit = {
 
   // set rax equal to the r/m operand
   rax = sail_sign_extend(0x3456, 64);
-  write_memory(operand_size_bytes, mem_addr, rax, create_writeAccessDescriptor());
+  write_operand(operand_size, rm_MEM(mem_addr), rax);
 
   execute(CMPXCHG(lock, operand_size, rm_MEM(mem_addr), reg_loc));
 
   // expect the r operand value to have been loaded into the r/m operand location
-  assert(read_memory(operand_size_bytes, mem_addr, create_readAccessDescriptor()) == r_operand_value, 
+  assert(read_operand(operand_size, rm_MEM(mem_addr)) == r_operand_value, 
     "CMPXCHG: value of r operand not successfully loaded into the r/m operand location");
   assert(rflags[ZF] == 1, "CMPXCHG, ZF not set on success")
 }
@@ -157,14 +156,13 @@ function cmpxchg_eq() -> unit = {
 function cmpxchg_neq() -> unit = {
   let lock = false;
   let operand_size = 64;
-  let operand_size_bytes = 8;
   let mem_addr = sail_sign_extend(0x1000, 64);
   let mem_val = sail_sign_extend(0x1245, 64);
   let reg_loc = REG_NORMAL(1);
 
   // set rax equal to the r/m operand
   rax = sail_sign_extend(0x3456, 64);
-  write_memory(operand_size_bytes, mem_addr, mem_val, create_writeAccessDescriptor());
+  write_operand(operand_size, rm_MEM(mem_addr), mem_val);
 
   execute(CMPXCHG(lock, operand_size, rm_MEM(mem_addr), reg_loc));
 
@@ -172,6 +170,25 @@ function cmpxchg_neq() -> unit = {
   assert(rax == mem_val, 
     "CMPXCHG: value of r/m operand not successfully loaded into rax");
   assert(rflags[ZF] == 0, "CMPXCHG, ZF not cleared on fail")
+}
+
+function xchg() -> unit = {
+  let operand_size = 64;
+  let mem_addr = sail_sign_extend(0x7654, 64);
+  let mem_val = sail_sign_extend(0xABCDEF, 64);
+  let reg_loc = REG_NORMAL(3);
+  let reg_val = 0x1234_5678_9ABC_DEF0;
+
+  // write values into operands
+  write_operand(operand_size, rm_MEM(mem_addr), mem_val);
+  write_GPR(operand_size, reg_loc, reg_val);
+
+  execute(XCHG(operand_size, rm_MEM(mem_addr), reg_loc));
+
+  // expect operand values to be swwapped
+  assert(read_operand(operand_size, rm_MEM(mem_addr)) == reg_val &
+    read_GPR(operand_size, reg_loc) == mem_val, 
+    "XCHG: operand values not swapped successfully")
 }
 
 function test_execute() -> unit = {
@@ -188,6 +205,7 @@ function test_execute() -> unit = {
   jmp();
   cmpxchg_eq();
   cmpxchg_neq();
+  xchg();
 }
 
 /*===========================================================
@@ -567,6 +585,38 @@ function test_decode_cmpxchg_rm16_r16() -> unit = {
 }
 
 /*===========================================================
+Decode XCHG tests
+============================================================*/
+
+function test_decode_xchg_rm8_r8() -> unit = {
+  // Testing that XCHG m(r15 + 0x3A), AL is decoded correctly
+  let old_rip = rip;
+  let instruction: bits(32) = 0b0100_0001 @ 0x86 @ 0b01_000_111 @ 0x3A;
+  write_instruction_to_memory(instruction, rip);
+  let (new_rip, decoded_instruction) = unwrap_decoded_instr(decode(rip));
+  rip = new_rip;
+  assert(unsigned(new_rip) - unsigned(old_rip) == 4, 
+    "XCHG(rm8, r8): Wrong instruction length has been read");
+  let expected_mem_addr = add_bits(r15, sail_sign_extend(0x3A, 64));
+  assert(decoded_instruction == XCHG(8, rm_MEM(expected_mem_addr), REG_NORMAL(0)), 
+    "XCHG(rm8, r8) instruction not decoded properly");
+}
+
+function test_decode_xchg_rm16_r16() -> unit = {
+  // Testing that XCHG m(r15 + 0x3A), AX is decoded correctly
+  let old_rip = rip;
+  let instruction: bits(48) = 0xF0 @ 0x66 @ 0b0100_0001 @ 0x87 @ 0b01_000_111 @ 0x3A;
+  write_instruction_to_memory(instruction, rip);
+  let (new_rip, decoded_instruction) = unwrap_decoded_instr(decode(rip));
+  rip = new_rip;
+  assert(unsigned(new_rip) - unsigned(old_rip) == 6, 
+    "XCHG(rm16, r16): Wrong instruction length has been read");
+  let expected_mem_addr = add_bits(r15, sail_sign_extend(0x3A, 64));
+  assert(decoded_instruction == XCHG(16, rm_MEM(expected_mem_addr), REG_NORMAL(0)), 
+    "XCHG(rm16, r16) instruction not decoded properly");
+}
+
+/*===========================================================
 Decode PUSH tests
 ============================================================*/
 
@@ -859,6 +909,8 @@ function test_decode() -> unit = {
 
   test_decode_cmpxchg_rm8_r8();
   test_decode_cmpxchg_rm16_r16();
+  test_decode_xchg_rm8_r8();
+  test_decode_xchg_rm16_r16();
 
   test_decode_group1_rm8_r8(TEST_CMP);
   test_decode_group1_rm16_r16(TEST_CMP);

@@ -844,7 +844,7 @@ Definition read_imm_operand (instruction_ptr : mword 64) (read_offset : Z) (oper
 (*member_Z_list operand_size [8; 16; 32; 64]*)
 : M ((Z * imm)) :=
    let operand_size_bytes := Z.quot (operand_size) (8) in
-   assert_exp' (Z.eqb (operand_size) ((Z.mul (8) (operand_size_bytes)))) "decode.sail:242.49-242.50" >>= fun _ =>
+   assert_exp' (Z.eqb (operand_size) ((Z.mul (8) (operand_size_bytes)))) "decode.sail:244.49-244.50" >>= fun _ =>
    (read_memory (operand_size_bytes) ((add_vec_int (instruction_ptr) (read_offset)))
       ((create_iFetchAccessDescriptor (tt)))) >>= fun imm_value =>
    let l__0 := operand_size in
@@ -1126,6 +1126,22 @@ Definition decode_one_byte_instruction
       (fail_if_lock (decoded_prefixes.(decodedPrefixes_lock)) ("CMP")) >>
       (get_Gv_Ev_operands (instruction_ptr) (read_offset) (decoded_prefixes)) >>= fun '((new_read_offset, operand_size, operand1, operand2)) =>
       returnM ((Some ((new_read_offset, CMP ((operand_size, operand1, operand2))))))
+    else if eq_vec (b__0) (((Ox"86")  : mword 8)) return M (option ((Z * ast))) then
+      (get_Eb_Gb_operands (instruction_ptr) (read_offset) (decoded_prefixes.(decodedPrefixes_REX))) >>= fun '((new_read_offset, operand1, operand2)) =>
+      match operand2 with
+      | rmi_REG reg_content =>
+         returnM ((Some ((new_read_offset, XCHG ((8, operand1, reg_content))))))
+      | _ => (fail ("Operand for XCHG not allowed"))  : M (option ((Z * ast)))
+      end
+       : M (option ((Z * ast)))
+    else if eq_vec (b__0) (((Ox"87")  : mword 8)) return M (option ((Z * ast))) then
+      (get_Ev_Gv_operands (instruction_ptr) (read_offset) (decoded_prefixes)) >>= fun '((new_read_offset, operand_size, operand1, operand2)) =>
+      match operand2 with
+      | rmi_REG reg_content =>
+         returnM ((Some ((new_read_offset, XCHG ((operand_size, operand1, reg_content))))))
+      | _ => (fail ("Operand for XCHG not allowed"))  : M (option ((Z * ast)))
+      end
+       : M (option ((Z * ast)))
     else if eq_vec (b__0) (((Ox"6A")  : mword 8)) return M (option ((Z * ast))) then
       (fail_if_lock (decoded_prefixes.(decodedPrefixes_lock)) ("PUSH")) >>
       (read_imm_operand (instruction_ptr) (read_offset) (8)) >>= fun '((new_read_offset, imm)) =>
@@ -1229,7 +1245,7 @@ Definition decode_one_byte_instruction
     else if eq_vec (b__0) (((Ox"C9")  : mword 8)) return M (option ((Z * ast))) then
       (fail_if_lock (decoded_prefixes.(decodedPrefixes_lock)) ("LEAVE")) >>
       let operand_size := get_operand_size_ignoring_REX (decoded_prefixes) (64) in
-      assert_exp' (orb ((Z.eqb (operand_size) (16))) ((Z.eqb (operand_size) (64)))) "tiny-x86.sail:782.50-782.51" >>= fun _ =>
+      assert_exp' (orb ((Z.eqb (operand_size) (16))) ((Z.eqb (operand_size) (64)))) "tiny-x86.sail:887.50-887.51" >>= fun _ =>
       returnM ((Some ((read_offset, LEAVE (operand_size)))))
     else if eq_vec (b__0) (((Ox"C3")  : mword 8)) return M (option ((Z * ast))) then
       (fail_if_lock (decoded_prefixes.(decodedPrefixes_lock)) ("RET")) >>
@@ -1239,22 +1255,22 @@ Definition decode_one_byte_instruction
                   ((eq_vec (b__0) (((Ox"75")  : mword 8))))))
       return
       M (option ((Z * ast))) then
-      let b__27 := b__0 in
+      let b__29 := b__0 in
       let string_op : string :=
-        if eq_vec (b__27) (((Ox"EB")  : mword 8)) then "JMP"
-        else if eq_vec (b__27) (((Ox"79")  : mword 8)) then "JNS"
-        else if eq_vec (b__27) (((Ox"75")  : mword 8)) then "JNE"
+        if eq_vec (b__29) (((Ox"EB")  : mword 8)) then "JMP"
+        else if eq_vec (b__29) (((Ox"79")  : mword 8)) then "JNS"
+        else if eq_vec (b__29) (((Ox"75")  : mword 8)) then "JNE"
         else "Unreachable op" in
       (fail_if_lock (decoded_prefixes.(decodedPrefixes_lock)) (string_op)) >>
       (read_memory (1) ((add_vec_int (instruction_ptr) (read_offset)))
          ((create_iFetchAccessDescriptor (tt)))) >>= fun operand =>
       let new_read_offset := Z.add (read_offset) (1) in
-      let b__30 := b__0 in
-      returnM ((if eq_vec (b__30) (((Ox"EB")  : mword 8)) then
+      let b__32 := b__0 in
+      returnM ((if eq_vec (b__32) (((Ox"EB")  : mword 8)) then
                   Some ((new_read_offset, JMP (operand)))
-                else if eq_vec (b__30) (((Ox"79")  : mword 8)) then
+                else if eq_vec (b__32) (((Ox"79")  : mword 8)) then
                   Some ((new_read_offset, JNS (operand)))
-                else if eq_vec (b__30) (((Ox"75")  : mword 8)) then
+                else if eq_vec (b__32) (((Ox"75")  : mword 8)) then
                   Some ((new_read_offset, JNE (operand)))
                 else None))
     else returnM (None))
@@ -1302,6 +1318,26 @@ Definition decode_two_byte_instruction
        else
          (fail ("This instruction decode is not implemented in this model"))
           : M (option ((Z * ast))))
+       : M (option ((Z * ast)))
+    else if eq_vec (b__0) (((Ox"0FB0")  : mword 16)) return M (option ((Z * ast))) then
+      (get_Eb_Gb_operands (instruction_ptr) (read_offset) (decoded_prefixes.(decodedPrefixes_REX))) >>= fun '((new_read_offset, operand1, operand2)) =>
+      match operand2 with
+      | rmi_REG reg_content =>
+         returnM ((Some
+                     ((new_read_offset, CMPXCHG
+                                          ((decoded_prefixes.(decodedPrefixes_lock), 8, operand1, reg_content))))))
+      | _ => (fail ("Operand for CMPXCHG not allowed"))  : M (option ((Z * ast)))
+      end
+       : M (option ((Z * ast)))
+    else if eq_vec (b__0) (((Ox"0FB1")  : mword 16)) return M (option ((Z * ast))) then
+      (get_Ev_Gv_operands (instruction_ptr) (read_offset) (decoded_prefixes)) >>= fun '((new_read_offset, operand_size, operand1, operand2)) =>
+      match operand2 with
+      | rmi_REG reg_content =>
+         returnM ((Some
+                     ((new_read_offset, CMPXCHG
+                                          ((decoded_prefixes.(decodedPrefixes_lock), operand_size, operand1, reg_content))))))
+      | _ => (fail ("Operand for CMPXCHG not allowed"))  : M (option ((Z * ast)))
+      end
        : M (option ((Z * ast)))
     else if eq_vec (b__0) (((Ox"0FAF")  : mword 16)) return M (option ((Z * ast))) then
       (fail_if_lock (decoded_prefixes.(decodedPrefixes_lock)) ("IMUL")) >>
@@ -1379,7 +1415,7 @@ Definition execute_ADD (lock : bool) (operand_size : Z) (dest : rm_operand) (src
    | _ => returnM (tt)
    end >>
    match dest with
-   | rm_REG g__4 =>
+   | rm_REG g__5 =>
       (if lock return M (unit) then
          (fail
             ("Exception #UD — Invalid Opcode (Undefined Opcode): LOCK prefix cannot be applied to dest = reg"))
@@ -1419,6 +1455,36 @@ Definition execute_CMP (operand_size : Z) (first : rm_operand) (second : rmi_ope
    (read_rmi_operand_without_lock (operand_size) (second)) >>= fun second_val =>
    let result' := sub_vec (first_val) (second_val) in
    (update_rflags_sub (first_val) (second_val) (result'))
+    : M (unit).
+
+Definition execute_CMPXCHG (lock : bool) (operand_size : Z) (dest : rm_operand) (src : reg)
+(*member_Z_list operand_size [8; 16; 32; 64]*)
+: M (unit) :=
+   match dest with
+   | rm_REG g__1 =>
+      (if lock return M (unit) then
+         (fail
+            ("Exception #UD — Invalid Opcode (Undefined Opcode): 
+            LOCK prefix cannot be applied to dest = reg"))
+          : M (unit)
+       else returnM (tt))
+       : M (unit)
+   | _ => returnM (tt)
+   end >>
+   ((read_reg rax)  : M (mword 64)) >>= fun (w__0 : mword 64) =>
+   let rax_portion := subrange_vec_dec (w__0) ((Z.sub (operand_size) (1))) (0) in
+   (read_rm_operand_with_lock (lock) (operand_size) (dest)) >>= fun dest_contents =>
+   (if Z.eqb ((uint (rax_portion))) ((uint (dest_contents))) return M (unit) then
+      ((read_reg rflags)  : M (mword 64)) >>= fun (w__1 : mword 64) =>
+      write_reg rflags (update_subrange_vec_dec (w__1) (6) (6) ((('b"1")  : mword 1))) >>
+      (read_GPR (operand_size) (src)) >>= fun src_contents =>
+      (write_rm_operand_with_lock (lock) (operand_size) (dest) (src_contents))
+       : M (unit)
+    else
+      ((read_reg rflags)  : M (mword 64)) >>= fun (w__2 : mword 64) =>
+      write_reg rflags (update_subrange_vec_dec (w__2) (6) (6) ((('b"0")  : mword 1))) >>
+      (write_GPR (operand_size) ((REG_NORMAL (0))) (dest_contents))
+       : M (unit))
     : M (unit).
 
 Definition execute_IMUL (operand_size : Z) (dest : Z) (src : rm_operand)
@@ -1522,19 +1588,19 @@ Definition execute_PUSH (operand_size : Z) (src : rmi_operand)
 (*member_Z_list operand_size [8; 16; 32; 64]*)
 : M (unit) :=
    match src with
-   | rmi_IMM g__1 =>
+   | rmi_IMM g__2 =>
       (if Z.eqb (operand_size) (64) return M (unit) then
          (fail ("Operand for PUSH operation not allowed"))
           : M (unit)
        else returnM (tt))
        : M (unit)
-   | rmi_REG g__2 =>
+   | rmi_REG g__3 =>
       (if orb ((Z.eqb (operand_size) (8))) ((Z.eqb (operand_size) (32))) return M (unit) then
          (fail ("Operand for PUSH operation not allowed"))
           : M (unit)
        else returnM (tt))
        : M (unit)
-   | rmi_MEM g__3 =>
+   | rmi_MEM g__4 =>
       (if orb ((Z.eqb (operand_size) (8))) ((Z.eqb (operand_size) (32))) return M (unit) then
          (fail ("Operand for PUSH operation not allowed"))
           : M (unit)
@@ -1570,7 +1636,7 @@ Definition execute_SUB (lock : bool) (operand_size : Z) (dest : rm_operand) (src
    | _ => returnM (tt)
    end >>
    match dest with
-   | rm_REG g__5 =>
+   | rm_REG g__6 =>
       (if lock return M (unit) then
          (fail
             ("Exception #UD — Invalid Opcode (Undefined Opcode): LOCK prefix cannot be applied to dest = reg"))
@@ -1584,6 +1650,16 @@ Definition execute_SUB (lock : bool) (operand_size : Z) (dest : rm_operand) (src
    let result' := sub_vec (dest_val) (src_val) in
    (write_rm_operand_with_lock (lock) (operand_size) (dest) (result')) >>
    (update_rflags_sub (dest_val) (src_val) (result'))
+    : M (unit).
+
+Definition execute_XCHG (operand_size : Z) (first : rm_operand) (second : reg)
+(*member_Z_list operand_size [8; 16; 32; 64]*)
+: M (unit) :=
+   let lock : bool := match first with | rm_MEM _ => true | _ => false end in
+   (read_rm_operand_with_lock (lock) (operand_size) (first)) >>= fun first_contents =>
+   (read_GPR (operand_size) (second)) >>= fun second_contents =>
+   (write_rm_operand_with_lock (lock) (operand_size) (first) (second_contents)) >>
+   (write_GPR (operand_size) (second) (first_contents))
     : M (unit).
 
 Definition execute_XOR (lock : bool) (operand_size : Z) (dest : rm_operand) (src : rmi_operand)
@@ -1627,6 +1703,10 @@ Definition execute (merge_var : ast) : M (unit) :=
    | LFENCE arg0 => (execute_LFENCE (arg0))  : M (unit)
    | MFENCE arg0 => (execute_MFENCE (arg0))  : M (unit)
    | CMP (operand_size, first, second) => (execute_CMP (operand_size) (first) (second))  : M (unit)
+   | CMPXCHG (lock, operand_size, dest, src) =>
+      (execute_CMPXCHG (lock) (operand_size) (dest) (src))  : M (unit)
+   | XCHG (operand_size, first, second) =>
+      (execute_XCHG (operand_size) (first) (second))  : M (unit)
    | PUSH (operand_size, src) => (execute_PUSH (operand_size) (src))  : M (unit)
    | POP (operand_size, dest) => (execute_POP (operand_size) (dest))  : M (unit)
    | ADD (lock, operand_size, dest, src) =>

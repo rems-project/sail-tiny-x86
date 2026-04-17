@@ -458,6 +458,55 @@ function clause decode_two_byte_instruction(0x0FB1, instruction_ptr, read_offset
 }
 
 
+
+/*------------------------------------------------------------------------------
+ * XCHG
+ *-----------------------------------------------------------------------------*/
+
+function clause execute(XCHG(operand_size, first, second)) = {
+    // If first is a memory location, then XCHG automatically becomes a locked instruction
+    let lock : bool =
+        match first {
+            rm_MEM(_) => true,
+            _ => false
+        };
+    // Get contents of both operands
+    let first_contents = read_operand(lock, operand_size, first);
+    let second_contents = read_GPR(operand_size, second);
+    // Swap contents of both operands
+    write_operand(lock, operand_size, first, second_contents);
+    write_GPR(operand_size, second, first_contents);
+}
+
+// Decode XCHG r/m8 r8
+function clause decode_one_byte_instruction(0x86, instruction_ptr, read_offset, decoded_prefixes) = {
+    // get 2 operands of the addressing method + operand type: Operand 1 = Eb, Operand 2 = Gb
+    let (new_read_offset, operand1, operand2) = 
+        get_Eb_Gb_operands(instruction_ptr, read_offset, decoded_prefixes.REX);
+    // return new read offset and decoded instruction
+    match operand2 {
+        rmi_REG(reg_content) => Some(new_read_offset, 
+            XCHG(8, operand1, reg_content)),
+        _ => fail("Operand for XCHG not allowed")
+    }
+    
+}
+
+// Decode XCHG r/m{16,32,64} r{16,32,64}
+function clause decode_one_byte_instruction(0x87, instruction_ptr, read_offset, decoded_prefixes) = {
+    // get 2 operands of the addressing method + operand type: Operand 1 = Ev, Operand 2 = Gv
+    let (new_read_offset, operand_size, operand1, operand2) = 
+        get_Ev_Gv_operands(instruction_ptr, read_offset, decoded_prefixes);
+    // return new read offset and decoded instruction
+    match operand2 {
+        rmi_REG(reg_content) => Some(new_read_offset, 
+            XCHG(operand_size, operand1, reg_content)),
+        _ => fail("Operand for XCHG not allowed")
+    }
+}
+
+
+
 /*------------------------------------------------------------------------------
  * PUSH
  *-----------------------------------------------------------------------------*/

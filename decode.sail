@@ -1,6 +1,6 @@
 union ast = {
     // Structure of all possible executable instructions
-    // if a type contains 2 operands, the first operand is dest and the second is src, unless the instruction is CMP
+    // if a type contains 2 operands, the first operand is dest and the second is src, unless the instruction is CMP or XCHG
     MOV: (operand_size, rm_operand, rmi_operand),
     XOR: (bool, operand_size, rm_operand, rmi_operand),
     SFENCE: unit,
@@ -8,6 +8,7 @@ union ast = {
     MFENCE: unit,
     CMP: (operand_size, rm_operand, rmi_operand),
     CMPXCHG: (bool, operand_size, rm_operand, reg),
+    XCHG: (operand_size, rm_operand, reg),
     PUSH: (operand_size, rmi_operand),
     POP: (operand_size, rm_operand),
     ADD: (bool, operand_size, rm_operand, rmi_operand),

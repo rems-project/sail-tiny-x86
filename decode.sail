@@ -426,6 +426,19 @@ function get_Eb_Ib_operands(instruction_ptr, read_offset, REX, mod_rm_byte) = {
     (read_offset, operand1, imm)
 }
 
+// Get 2 operands of the addressing method + operand type: Operand 1 = Ev, Operand 2 = Iz
+val get_Ev_Ib_operands: (bits(64), int, decodedPrefixes, modRMByte) -> (int, operand_size, rm_operand, imm)
+function get_Ev_Ib_operands(instruction_ptr, read_offset, decoded_prefixes, mod_rm_byte) = {
+    // Get operand size. Default is 32 bits.
+    let operand_size = get_operand_size_using_REX(decoded_prefixes, 32);
+    // Get r/m operand
+    let (read_offset, operand1) = decode_rm_operand_inner(addressingMethod_E, instruction_ptr, read_offset, mod_rm_byte, operand_size, decoded_prefixes.REX);
+    // Get imm operand
+    let (read_offset, imm) = read_imm_operand(instruction_ptr, read_offset, 8);
+    // return new read offset, operand size, and operands
+    (read_offset, operand_size, operand1, imm)
+}
+
 
 
 /*------------------------------------------------------------------------------

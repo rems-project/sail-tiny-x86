@@ -229,13 +229,18 @@ function clause decode_one_byte_instruction(0x33, instruction_ptr, read_offset, 
 /* WARNING: Opcodes 80 (r/m8 imm8) and 81 (all others) encode a group of instructions. 
 The exact instruction encoded is specified in the reg field of the mod r/m byte.
 Out of all instructions with opcodes 80 and 81, we currently only support the ADD, SUB, XOR and CMP instructions. */
-function clause decode_one_byte_instruction(0b1000_000 @ not_8_bit, instruction_ptr, read_offset, decoded_prefixes) = {
+function clause decode_one_byte_instruction(0b1000_00 @ suffix, instruction_ptr, read_offset, decoded_prefixes) = {
     // fetch mod r/m byte
     let (read_offset, mod_rm_byte) = read_mod_rm_byte(instruction_ptr, read_offset);
 
     // get operands
     let (new_read_offset, operand_size, operand1, imm) = {
-        if not_8_bit == 0b1 then
+        if suffix == 0b11 then
+            // Get 2 operands of the addressing method + operand type: Operand 1 = Ev, Operand 2 = Ib
+            get_Ev_Ib_operands(instruction_ptr, read_offset, decoded_prefixes, mod_rm_byte)
+        else if suffix == 0b10 then
+            fail("Exception #UD — Invalid Opcode (Undefined Opcode): Opcode 0x82 is invalid or not encodable in 64-bit mode")
+        else if suffix == 0b01 then
             // Get 2 operands of the addressing method + operand type: Operand 1 = Ev, Operand 2 = Iz
             get_Ev_Iz_operands(instruction_ptr, read_offset, decoded_prefixes, mod_rm_byte)
         else {

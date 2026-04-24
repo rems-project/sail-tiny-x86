@@ -516,9 +516,7 @@ Definition undefined_Barrier '(tt : unit) : M (Barrier) :=
 Definition read_imm (operand_size : Z) (imm : imm) (*member_Z_list operand_size [8; 16; 32; 64]*)
 : M (mword operand_size) :=
    match imm with
-   | IMM8 value =>
-      assert_exp' (Z.eqb (operand_size) (8)) "Immediate value size is 8 bits, but operand size is not." >>= fun _ =>
-      returnM ((autocast (T := mword)  value))
+   | IMM8 value => returnM ((sign_extend (value) (operand_size)))
    | IMM16 value =>
       assert_exp' (Z.eqb (operand_size) (16)) "Immediate value size is 16 bits, but operand size is not." >>= fun _ =>
       returnM ((autocast (T := mword)  value))
@@ -541,7 +539,7 @@ Definition read_rm_operand_with_lock (lock : bool) (operand_size : Z) (operand :
         if lock then create_atomicReadAccessDescriptor (tt)
         else create_readAccessDescriptor (tt) in
       let operand_size_bytes := Z.quot (operand_size) (8) in
-      assert_exp' (Z.eqb (operand_size) ((Z.mul (operand_size_bytes) (8)))) "operands.sail:64.57-64.58" >>= fun _ =>
+      assert_exp' (Z.eqb (operand_size) ((Z.mul (operand_size_bytes) (8)))) "operands.sail:63.57-63.58" >>= fun _ =>
       autocast_m (T := mword) ((read_memory _ (mem_addr) (acc_desc))
        : M (mword (8 * ZEuclid.div operand_size 8)))
    end
@@ -563,7 +561,7 @@ Definition read_rmi_operand_with_lock (lock : bool) (operand_size : Z) (operand 
         if lock then create_atomicReadAccessDescriptor (tt)
         else create_readAccessDescriptor (tt) in
       let operand_size_bytes := Z.quot (operand_size) (8) in
-      assert_exp' (Z.eqb (operand_size) ((Z.mul (operand_size_bytes) (8)))) "operands.sail:84.57-84.58" >>= fun _ =>
+      assert_exp' (Z.eqb (operand_size) ((Z.mul (operand_size_bytes) (8)))) "operands.sail:83.57-83.58" >>= fun _ =>
       autocast_m (T := mword) ((read_memory _ (mem_addr) (acc_desc))
        : M (mword (8 * ZEuclid.div operand_size 8)))
    end
@@ -585,7 +583,7 @@ Definition write_rm_operand_with_lock
         if lock then create_atomicWriteAccessDescriptor (tt)
         else create_writeAccessDescriptor (tt) in
       let operand_size_bytes := Z.quot (operand_size) (8) in
-      assert_exp' (Z.eqb (operand_size) ((Z.mul (operand_size_bytes) (8)))) "operands.sail:111.57-111.58" >>= fun _ =>
+      assert_exp' (Z.eqb (operand_size) ((Z.mul (operand_size_bytes) (8)))) "operands.sail:110.57-110.58" >>= fun _ =>
       (write_memory (operand_size_bytes) (mem_addr) ((autocast (T := mword)  value)) (acc_desc))
        : M (unit)
    end
@@ -993,6 +991,16 @@ Definition get_Eb_Ib_operands
    (read_imm_operand (instruction_ptr) (read_offset) (8)) >>= fun '((read_offset, imm)) =>
    returnM ((read_offset, operand1, imm)).
 
+Definition get_Ev_Ib_operands
+(instruction_ptr : mword 64) (read_offset : Z) (decoded_prefixes : decodedPrefixes)
+(mod_rm_byte : mword 8)
+: M ((Z * Z * rm_operand * imm)) :=
+   let operand_size := get_operand_size_using_REX (decoded_prefixes) (32) in
+   (decode_rm_operand_inner (addressingMethod_E) (instruction_ptr) (read_offset) (mod_rm_byte)
+      (operand_size) (decoded_prefixes.(decodedPrefixes_REX))) >>= fun '((read_offset, operand1)) =>
+   (read_imm_operand (instruction_ptr) (read_offset) (8)) >>= fun '((read_offset, imm)) =>
+   returnM ((read_offset, operand_size, operand1, imm)).
+
 Definition fail_if_lock (lock : bool) (operation : string) : M (unit) :=
    let error_message :=
      String.append ("Exception #UD — Invalid Opcode (Undefined Opcode): ")
@@ -1075,12 +1083,19 @@ Definition decode_one_byte_instruction
       returnM ((Some
                   ((new_read_offset, XOR
                                        ((decoded_prefixes.(decodedPrefixes_lock), operand_size, operand1, operand2))))))
-    else if eq_vec ((subrange_vec_dec (b__0) (7) (1))) ((('b"1000000")  : mword 7))
+    else if eq_vec ((subrange_vec_dec (b__0) (7) (2))) ((('b"100000")  : mword 6))
       return
       M (option ((Z * ast))) then
-      let not_8_bit := subrange_vec_dec (b__0) (0) (0) in
+      let suffix := subrange_vec_dec (b__0) (1) (0) in
       (read_mod_rm_byte (instruction_ptr) (read_offset)) >>= fun '((read_offset, mod_rm_byte)) =>
-      (if eq_vec (not_8_bit) ((('b"1")  : mword 1)) return M ((Z * Z * rm_operand * imm)) then
+      (if eq_vec (suffix) ((('b"11")  : mword 2)) return M ((Z * Z * rm_operand * imm)) then
+         (get_Ev_Ib_operands (instruction_ptr) (read_offset) (decoded_prefixes) (mod_rm_byte))
+          : M ((Z * Z * rm_operand * imm))
+       else if eq_vec (suffix) ((('b"10")  : mword 2)) return M ((Z * Z * rm_operand * imm)) then
+         (fail
+            ("Exception #UD — Invalid Opcode (Undefined Opcode): Opcode 0x82 is invalid or not encodable in 64-bit mode"))
+          : M ((Z * Z * rm_operand * imm))
+       else if eq_vec (suffix) ((('b"01")  : mword 2)) return M ((Z * Z * rm_operand * imm)) then
          (get_Ev_Iz_operands (instruction_ptr) (read_offset) (decoded_prefixes) (mod_rm_byte))
           : M ((Z * Z * rm_operand * imm))
        else
@@ -1245,7 +1260,7 @@ Definition decode_one_byte_instruction
     else if eq_vec (b__0) (((Ox"C9")  : mword 8)) return M (option ((Z * ast))) then
       (fail_if_lock (decoded_prefixes.(decodedPrefixes_lock)) ("LEAVE")) >>
       let operand_size := get_operand_size_ignoring_REX (decoded_prefixes) (64) in
-      assert_exp' (orb ((Z.eqb (operand_size) (16))) ((Z.eqb (operand_size) (64)))) "tiny-x86.sail:887.50-887.51" >>= fun _ =>
+      assert_exp' (orb ((Z.eqb (operand_size) (16))) ((Z.eqb (operand_size) (64)))) "tiny-x86.sail:892.50-892.51" >>= fun _ =>
       returnM ((Some ((read_offset, LEAVE (operand_size)))))
     else if eq_vec (b__0) (((Ox"C3")  : mword 8)) return M (option ((Z * ast))) then
       (fail_if_lock (decoded_prefixes.(decodedPrefixes_lock)) ("RET")) >>

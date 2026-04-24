@@ -512,6 +512,39 @@ function test_decode_group1_rm64_imm32(instr: group1instr) -> unit = {
   }
 }
 
+function test_decode_group1_rm64_imm8(instr: group1instr) -> unit = {
+  // Testing that instr m(rax * 2 + rcx), 0xAB (with lock) is decoded correctly
+
+  let reg_field: bits(3) = match instr {
+    TEST_XOR => 0b110,
+    TEST_CMP => 0b111,
+    TEST_ADD => 0b000,
+    TEST_SUB => 0b101
+  };
+
+  let old_rip = rip;
+
+  let first_prefix = if instr == TEST_CMP then 0x40 else 0xF0;
+  let instruction: bits(48) = first_prefix @ 0b0100_1000 @ 0x83 @ 0b00 @ reg_field @ 0b100 @ 0b01_000_001 @ 0xAB;
+  write_instruction_to_memory(instruction, rip);
+  rax = 0xFEDC_BA98_7654_3210;
+  rcx = 0xF0F0_F0F0_EEEE_CCCC;
+  let (new_rip, decoded_instruction) = unwrap_decoded_instr(decode(rip));
+  rip = new_rip;
+  let expected_mem_addr = add_bits(add_bits(rax, rax), rcx);
+  assert(unsigned(new_rip) - unsigned(old_rip) == 6, concat_str(group1instr_to_string(instr), "(rm64, imm8): Wrong instruction length has been read"));
+
+  let error_message = concat_str(group1instr_to_string(instr), "(rm64, imm8) instruction not decoded properly");
+  match instr {
+    TEST_XOR => assert(decoded_instruction == XOR(true, 64, rm_MEM(expected_mem_addr), rmi_IMM(IMM8(0xAB))), error_message),
+    TEST_CMP => assert(decoded_instruction == CMP(64, rm_MEM(expected_mem_addr), rmi_IMM(IMM8(0xAB))), error_message),
+    TEST_ADD => assert(decoded_instruction == ADD(true, 64, rm_MEM(expected_mem_addr), rmi_IMM(IMM8(0xAB))), error_message),
+    TEST_SUB => assert(decoded_instruction == SUB(true, 64, rm_MEM(expected_mem_addr), rmi_IMM(IMM8(0xAB))), error_message)
+  }
+}
+
+
+
 /*===========================================================
 Decode FENCE tests
 ============================================================*/
@@ -902,6 +935,7 @@ function test_decode() -> unit = {
   test_decode_group1_r64_rm64(TEST_XOR);
   test_decode_group1_rm8_imm8(TEST_XOR);
   test_decode_group1_rm64_imm32(TEST_XOR);
+  test_decode_group1_rm64_imm8(TEST_XOR);
   
   test_decode_sfence();
   test_decode_lfence();
@@ -918,6 +952,7 @@ function test_decode() -> unit = {
   test_decode_group1_r64_rm64(TEST_CMP);
   test_decode_group1_rm8_imm8(TEST_CMP);
   test_decode_group1_rm64_imm32(TEST_CMP);
+  test_decode_group1_rm64_imm8(TEST_CMP);
 
   test_decode_push_imm16();
   test_decode_push_m64();
@@ -932,6 +967,7 @@ function test_decode() -> unit = {
   test_decode_group1_r64_rm64(TEST_ADD);
   test_decode_group1_rm8_imm8(TEST_ADD);
   test_decode_group1_rm64_imm32(TEST_ADD);
+  test_decode_group1_rm64_imm8(TEST_ADD);
 
   test_decode_group1_rm8_r8(TEST_SUB);
   test_decode_group1_rm16_r16(TEST_SUB);
@@ -939,6 +975,7 @@ function test_decode() -> unit = {
   test_decode_group1_r64_rm64(TEST_SUB);
   test_decode_group1_rm8_imm8(TEST_SUB);
   test_decode_group1_rm64_imm32(TEST_SUB);
+  test_decode_group1_rm64_imm8(TEST_SUB);
 
   test_decode_imul_r16_rm16();
   test_decode_imul_r64_rm64();

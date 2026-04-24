@@ -34,8 +34,7 @@ val read_imm: forall 'operand_size, 'operand_size in {8, 16, 32, 64}. (int('oper
 function read_imm(operand_size, imm) = {
     match imm {
         IMM8(value) => {
-            assert(operand_size == 8, "Immediate value size is 8 bits, but operand size is not.");
-            value
+            sail_sign_extend(value, operand_size)
         },
         IMM16(value) => {
             assert(operand_size == 16, "Immediate value size is 16 bits, but operand size is not.");

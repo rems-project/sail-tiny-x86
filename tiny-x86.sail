@@ -226,9 +226,9 @@ function clause decode_one_byte_instruction(0x33, instruction_ptr, read_offset, 
 }
 
 // Decode XOR, ADD, SUB, CMP r/m{8, 16, 32, 64} imm{8, 16, 32, 32}
-/* WARNING: Opcodes 80 (r/m8 imm8) and 81 (all others) encode a group of instructions. 
+/* WARNING: Opcodes 0x80-83 encode a group of instructions. 
 The exact instruction encoded is specified in the reg field of the mod r/m byte.
-Out of all instructions with opcodes 80 and 81, we currently only support the ADD, SUB, XOR and CMP instructions. */
+Out of all instructions with opcodes 0x80-83, we currently only support the ADD, SUB, XOR and CMP instructions. */
 function clause decode_one_byte_instruction(0b1000_00 @ suffix, instruction_ptr, read_offset, decoded_prefixes) = {
     // fetch mod r/m byte
     let (read_offset, mod_rm_byte) = read_mod_rm_byte(instruction_ptr, read_offset);

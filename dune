@@ -1,6 +1,6 @@
-(coq.theory
+(rocq.theory
  (name SailTinyX86)
- (package coq-sail-tiny-x86)
+ (package rocq-sail-tiny-x86)
  (modules
    Tiny_x86
    Tiny_x86_types
@@ -9,11 +9,11 @@
 )
 
 (rule
- (deps sail_files (:sail %{read-lines:sail_files}) (env_var SAIL_OPTS) (env_var SAIL_COQ_OPTS) (package sail))
+ (deps sail_files (:sail %{read-lines:sail_files}) (env_var SAIL_OPTS) (env_var SAIL_ROCQ_OPTS) (package sail))
  (targets Tiny_x86.v Tiny_x86_types.v)
  (action
   (run sail %{env:SAIL_OPTS=--strict-var}
-       --coq %{env:SAIL_COQ_OPTS=--coq-record-update}
+       --rocq %{env:SAIL_ROCQ_OPTS=--rocq-record-update}
        -o Tiny_x86 %{sail}))
 )
 

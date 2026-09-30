@@ -8,9 +8,10 @@ license: "BSD-2-Clause"
 homepage: "https://github.com/rems-project/sail-tiny-x86"
 bug-reports: "https://github.com/rems-project/sail-tiny-x86/issues"
 depends: [
-  "dune" {>= "3.8"}
-  "coq" {>= "9.0"}
-  "sail" {>= "0.19.1"}
+  "dune" {>= "3.21"}
+  "rocq-core" {>= "9.0"}
+  "rocq-stdlib" {>= "9.0"}
+  "sail" {>= "0.20.1"}
   "sail_coq_backend"
   "sail_lem_backend"
   "sail_c_backend"
@@ -20,9 +21,9 @@ depends: [
   "sail_ocaml_backend"
   "sail_latex_backend"
   "sail_output"
-  "coq-stdpp" {>= "1.10.0"}
-  "coq-stdpp-bitvector" {>= "1.10.0"}
-  "coq-sail-stdpp" {>= "0.19.1"}
+  "rocq-stdpp" {>= "1.10.0"}
+  "rocq-stdpp-bitvector" {>= "1.10.0"}
+  "rocq-sail-stdpp" {>= "0.20.1"}
   "coq-record-update" {>= "0.3.4"}
   "odoc" {with-doc}
 ]
@@ -41,3 +42,4 @@ build: [
   ]
 ]
 dev-repo: "git+https://github.com/rems-project/sail-tiny-x86.git"
+x-maintenance-intent: ["(latest)"]

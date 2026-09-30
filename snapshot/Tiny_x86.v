@@ -14,14 +14,14 @@ Open Scope bool.
 Open Scope Z.
 
 
+Definition __id (x : Z) : Z := x.
+
 Definition neq_int (x : Z) (y : Z) : bool := negb ((Z.eqb (x) (y))).
 
 Definition neq_bool (x : bool) (y : bool) : bool := negb ((Bool.eqb (x) (y))).
 
 Definition eq_bits_int {n : Z} (x : mword n) (y : Z) (*(n >=? 0) && (y >=? 0)*) : bool :=
    Z.eqb ((uint (x))) (y).
-
-Definition __id (x : Z) : Z := x.
 
 Definition _shl_int_general (m : Z) (n : Z) : Z :=
    if Z.geb (n) (0) then shl_int (m) (n) else shr_int (m) ((Z.opp (n))).
@@ -127,7 +127,8 @@ Definition mod' (x : Z) (y : Z) : Z := Z.rem (x) (y).
 Definition fail {a : Type} (message : string) : M (a) :=
    assert_exp' false message >>= fun _ => exit tt.
 
-Definition flip_bit (bit_to_flip : bitU) : bitU := if eq_bit (bit_to_flip) (B0) then B1 else B0.
+Definition flip_bit (bit_to_flip : mword 1) : mword 1 :=
+   if eq_vec (bit_to_flip) (('b"0")) then ('b"1") else ('b"0").
 
 Definition GPRs : vec (register_ref (bits 64)) 16 :=
 vec_of_list_len [r15_ref;r14_ref;r13_ref;r12_ref;r11_ref;r10_ref;r9_ref;r8_ref;rdi_ref;rsi_ref;
@@ -244,7 +245,7 @@ Definition write_GPR (operand_size : Z) (reg : reg) (value : mword operand_size)
          (reg_deref ((vec_access_dec (GPRs) (i)))) >>= fun (w__0 : mword 64) =>
          write_reg_ref
            (vec_access_dec (GPRs) (i))
-           (update_subrange_vec_dec (w__0) (63) (32) (((Ox"00000000")  : mword 32))) >>
+           (update_subrange_vec_dec (w__0) (63) (32) ((Ox"00000000"))) >>
          (reg_deref ((vec_access_dec (GPRs) (i)))) >>= fun (w__1 : mword 64) =>
          write_reg_ref
            (vec_access_dec (GPRs) (i))
@@ -278,17 +279,17 @@ Definition update_sign_flag (operand_size : Z) (result' : mword operand_size) (*
         ((vec_of_bits [access_vec_dec (result') ((Z.sub (operand_size) (1)))]  : mword 1)))
     : M (unit).
 
-Definition update_overflow_flag_add_inner (first_msb : bitU) (second_msb : bitU) (result_msb : bitU)
+Definition update_overflow_flag_add_inner
+(first_msb : mword 1) (second_msb : mword 1) (result_msb : mword 1)
 : M (unit) :=
    ((read_reg rflags)  : M (mword 64)) >>= fun (w__0 : mword 64) =>
    write_reg
      rflags
      (update_subrange_vec_dec (w__0) (11) (11)
-        ((if andb ((eq_bit (first_msb) (second_msb))) ((negb ((eq_bit (result_msb) (first_msb)))))
+        ((if andb ((eq_vec (first_msb) (second_msb))) ((negb ((eq_vec (result_msb) (first_msb)))))
           then
             ('b"1")
-             : mword 1
-          else ('b"0")  : mword 1)))
+          else ('b"0"))))
     : M (unit).
 
 Definition update_overflow_flag_sub
@@ -312,8 +313,8 @@ Definition update_carry_flag_sub {m : Z} (first : mword m) (second : mword m) (*
    write_reg
      rflags
      (update_subrange_vec_dec (w__0) (0) (0)
-        ((if Z.ltb ((uint (first))) ((uint (second))) then ('b"1")  : mword 1
-          else ('b"0")  : mword 1)))
+        ((if Z.ltb ((uint (first))) ((uint (second))) then ('b"1")
+          else ('b"0"))))
     : M (unit).
 
 Definition update_carry_flag_add (size : Z) (first : mword size) (second : mword size) (*size >? 0*)
@@ -324,8 +325,7 @@ Definition update_carry_flag_add (size : Z) (first : mword size) (second : mword
      (update_subrange_vec_dec (w__0) (0) (0)
         ((if Z.gtb ((Z.add ((uint (first))) ((uint (second))))) ((Z.sub ((pow2 (size))) (1))) then
             ('b"1")
-             : mword 1
-          else ('b"0")  : mword 1)))
+          else ('b"0"))))
     : M (unit).
 
 Definition update_aux_carry_flag_sub {m : Z} (first : mword m) (second : mword m) (*m >=? 4*)
@@ -345,20 +345,18 @@ Definition update_zero_flag (operand_size : Z) (result' : mword operand_size) (*
    write_reg
      rflags
      (update_subrange_vec_dec (w__0) (6) (6)
-        ((if eq_vec (result') ((zero_extend (((Ox"0")  : mword 4)) (operand_size))) then
-            ('b"1")
-             : mword 1
-          else ('b"0")  : mword 1)))
+        ((if eq_vec (result') ((zero_extend ((Ox"0")) (operand_size))) then ('b"1")
+          else ('b"0"))))
     : M (unit).
 
 Definition update_parity_flag {m : Z} (result' : mword m) (*m >=? 8*) : M (unit) :=
-   let even_parity := B1 in
-   let even_parity : bitU :=
+   let even_parity := ('b"1") in
+   let even_parity : mword 1 :=
      let '(loop_i_lower) := 0 in
      let '(loop_i_upper) := 7 in
      (foreach_Z_up loop_i_lower loop_i_upper 1 even_parity
        (fun i even_parity =>
-         if eq_bit ((access_vec_dec (result') (i))) (B1) then flip_bit (even_parity)
+         if eq_vec ((access_vec_dec (result') (i))) (('b"1")) then flip_bit (even_parity)
          else even_parity)) in
    ((read_reg rflags)  : M (mword 64)) >>= fun (w__0 : mword 64) =>
    write_reg
@@ -541,7 +539,7 @@ Definition read_rm_operand_with_lock (lock : bool) (operand_size : Z) (operand :
       let operand_size_bytes := Z.quot (operand_size) (8) in
       assert_exp' (Z.eqb (operand_size) ((Z.mul (operand_size_bytes) (8)))) "operands.sail:63.57-63.58" >>= fun _ =>
       autocast_m (T := mword) ((read_memory _ (mem_addr) (acc_desc))
-       : M (mword (8 * ZEuclid.div operand_size 8)))
+       : M (mword (8 * e_div operand_size 8)))
    end
     : M (mword operand_size).
 
@@ -563,7 +561,7 @@ Definition read_rmi_operand_with_lock (lock : bool) (operand_size : Z) (operand 
       let operand_size_bytes := Z.quot (operand_size) (8) in
       assert_exp' (Z.eqb (operand_size) ((Z.mul (operand_size_bytes) (8)))) "operands.sail:83.57-83.58" >>= fun _ =>
       autocast_m (T := mword) ((read_memory _ (mem_addr) (acc_desc))
-       : M (mword (8 * ZEuclid.div operand_size 8)))
+       : M (mword (8 * e_div operand_size 8)))
    end
     : M (mword operand_size).
 
@@ -704,7 +702,7 @@ Definition undefined_addressingMethod '(tt : unit) : M (addressingMethod) :=
 Definition reset_prefixes_not_at_end (decoded_prefixes : decodedPrefixes) : decodedPrefixes :=
    decoded_prefixes
    <|decodedPrefixes_mandatory_prefix_66H := false|>
-   <|decodedPrefixes_REX := (Ox"00")  : mword 8|>.
+   <|decodedPrefixes_REX := (Ox"00")|>.
 
 Fixpoint _rec_decode_prefix_inner
 (instruction_ptr : mword 64) (read_offset : Z) (decoded_prefixes : decodedPrefixes)
@@ -716,14 +714,14 @@ exact (
     else
       (read_memory (1) ((add_vec_int (instruction_ptr) (read_offset)))
          ((create_iFetchAccessDescriptor (tt)))) >>= fun (next_prefix : bits 8) =>
-      (if eq_vec (next_prefix) (((Ox"F0")  : mword 8)) return M ((Z * decodedPrefixes)) then
+      (if eq_vec (next_prefix) ((Ox"F0")) return M ((Z * decodedPrefixes)) then
          let reset_decoded_prefixes := reset_prefixes_not_at_end (decoded_prefixes) in
          let new_decoded_prefixes := reset_decoded_prefixes <|decodedPrefixes_lock := true|> in
          (_rec_decode_prefix_inner (instruction_ptr) ((Z.add (read_offset) (1)))
             (new_decoded_prefixes) (next_prefix) ((Z.sub (max_iters) (1))) ((Z.sub (_reclimit) (1)))
             (_limit_reduces_bool _acc ltac:(assumption)))
           : M ((Z * decodedPrefixes))
-       else if eq_vec (next_prefix) (((Ox"66")  : mword 8)) return M ((Z * decodedPrefixes)) then
+       else if eq_vec (next_prefix) ((Ox"66")) return M ((Z * decodedPrefixes)) then
          let reset_decoded_prefixes := reset_prefixes_not_at_end (decoded_prefixes) in
          let new_decoded_prefixes :=
            reset_decoded_prefixes
@@ -733,11 +731,11 @@ exact (
             (new_decoded_prefixes) (next_prefix) ((Z.sub (max_iters) (1))) ((Z.sub (_reclimit) (1)))
             (_limit_reduces_bool _acc ltac:(assumption)))
           : M ((Z * decodedPrefixes))
-       else if eq_vec ((subrange_vec_dec (next_prefix) (7) (4))) (((Ox"4")  : mword 4))
+       else if eq_vec ((subrange_vec_dec (next_prefix) (7) (4))) ((Ox"4"))
          return
          M ((Z * decodedPrefixes)) then
          let reset_decoded_prefixes :=
-           if eq_vec (prev_prefix) (((Ox"66")  : mword 8)) then decoded_prefixes
+           if eq_vec (prev_prefix) ((Ox"66")) then decoded_prefixes
            else reset_prefixes_not_at_end (decoded_prefixes) in
          let rex_contents : REX_typ := next_prefix in
          let new_decoded_prefixes := reset_decoded_prefixes <|decodedPrefixes_REX := rex_contents|> in
@@ -764,31 +762,31 @@ Definition decode_prefix_inner
 
 Definition decode_prefix (instruction_ptr : mword 64) (decoded_prefixes : decodedPrefixes)
 : M ((Z * decodedPrefixes)) :=
-   decode_prefix_inner (instruction_ptr) (0) (decoded_prefixes) (((Ox"00")  : mword 8)) (15).
+   decode_prefix_inner (instruction_ptr) (0) (decoded_prefixes) ((Ox"00")) (15).
 
 Definition get_mod_rm_byte_REG (mod_rm_byte : mword 8) (REX : mword 8) : Z :=
    let base_reg_loc := uint ((_get_modRMByte_REG (mod_rm_byte))) in
-   if eq_vec ((_get_REX_R (REX))) ((('b"1")  : mword 1)) then Z.add (8) (base_reg_loc)
+   if eq_vec ((_get_REX_R (REX))) (('b"1")) then Z.add (8) (base_reg_loc)
    else base_reg_loc.
 
 Definition get_mod_rm_byte_RM (mod_rm_byte : mword 8) (REX : mword 8) : Z :=
    let base_reg_loc := uint ((_get_modRMByte_RM (mod_rm_byte))) in
-   if eq_vec ((_get_REX_B (REX))) ((('b"1")  : mword 1)) then Z.add (8) (base_reg_loc)
+   if eq_vec ((_get_REX_B (REX))) (('b"1")) then Z.add (8) (base_reg_loc)
    else base_reg_loc.
 
 Definition get_sib_byte_BASE (sib_byte : mword 8) (REX : mword 8) : Z :=
    let base_reg_loc := uint ((_get_SIBByte_Base (sib_byte))) in
-   if eq_vec ((_get_REX_B (REX))) ((('b"1")  : mword 1)) then Z.add (8) (base_reg_loc)
+   if eq_vec ((_get_REX_B (REX))) (('b"1")) then Z.add (8) (base_reg_loc)
    else base_reg_loc.
 
 Definition get_sib_byte_INDEX (sib_byte : mword 8) (REX : mword 8) : Z :=
    let base_reg_loc := uint ((_get_SIBByte_Index (sib_byte))) in
-   if eq_vec ((_get_REX_X (REX))) ((('b"1")  : mword 1)) then Z.add (8) (base_reg_loc)
+   if eq_vec ((_get_REX_X (REX))) (('b"1")) then Z.add (8) (base_reg_loc)
    else base_reg_loc.
 
 Definition get_reg_value_in_opcode_byte (reg_field : mword 3) (REX : mword 8) : Z :=
    let base_reg_loc := uint (reg_field) in
-   if eq_vec ((_get_REX_B (REX))) ((('b"1")  : mword 1)) then Z.add (8) (base_reg_loc)
+   if eq_vec ((_get_REX_B (REX))) (('b"1")) then Z.add (8) (base_reg_loc)
    else base_reg_loc.
 
 Definition read_sib_byte (instruction_ptr : mword 64) (read_offset : Z) : M ((Z * mword 8)) :=
@@ -802,12 +800,12 @@ Definition decode_sib_byte
    (read_sib_byte (instruction_ptr) (read_offset)) >>= fun '((new_read_offset, sib_byte)) =>
    let sib_byte_BASE := get_sib_byte_BASE (sib_byte) (REX) in
    let sib_byte_INDEX := get_sib_byte_INDEX (sib_byte) (REX) in
-   (if Z.eqb (sib_byte_INDEX) (4) then returnM ((zero_extend (((Ox"0")  : mword 4)) (64)))
+   (if Z.eqb (sib_byte_INDEX) (4) then returnM ((zero_extend ((Ox"0")) (64)))
     else (read_GPR (64) ((REG_NORMAL (sib_byte_INDEX))))  : M (mword 64)) >>= fun index =>
    let scaled_index := shiftl (index) ((uint ((_get_SIBByte_Scale (sib_byte))))) in
    let three_bit_base_reg := mod' (sib_byte_BASE) (8) in
    (if andb ((Z.eqb (three_bit_base_reg) (5)))
-         ((eq_vec ((_get_modRMByte_Mod (mod_rm_byte))) ((('b"00")  : mword 2))))
+         ((eq_vec ((_get_modRMByte_Mod (mod_rm_byte))) (('b"00"))))
       return
       M ((Z * mword 64)) then
       (read_memory (4) ((add_vec_int (instruction_ptr) (new_read_offset)))
@@ -828,7 +826,7 @@ Definition get_operand_size_using_REX
 (decoded_prefixes : decodedPrefixes) (default_operand_size : Z)
 (*member_Z_list default_operand_size [32; 64]*)
 : Z :=
-   if eq_vec ((_get_REX_W (decoded_prefixes.(decodedPrefixes_REX)))) ((('b"1")  : mword 1)) then 64
+   if eq_vec ((_get_REX_W (decoded_prefixes.(decodedPrefixes_REX)))) (('b"1")) then 64
    else if decoded_prefixes.(decodedPrefixes_op_size_override) then 16
    else default_operand_size.
 
@@ -857,7 +855,7 @@ Definition wrap_reg (reg_index : Z) (operand_size : Z) (REX : mword 8)
 (*(0 <=? reg_index) && (reg_index <=? 15)*) (*member_Z_list operand_size [8; 16; 32; 64]*)
 : reg :=
    if andb ((Z.eqb (operand_size) (8)))
-        ((andb ((eq_vec (REX) (((Ox"00")  : mword 8))))
+        ((andb ((eq_vec (REX) ((Ox"00"))))
             ((andb ((Z.geb (reg_index) (4))) ((Z.leb (reg_index) (7))))))) then
      REG_HIGH_BYTE ((Z.sub (reg_index) (4)))
    else REG_NORMAL (reg_index).
@@ -870,7 +868,7 @@ Definition decode_rm_operand_inner
    match merge_var with
    | (addressingMethod_E, instruction_ptr, read_offset, mod_rm_byte, operand_size, REX) =>
       let reg_used : reg_index := get_mod_rm_byte_RM (mod_rm_byte) (REX) in
-      (if eq_vec ((_get_modRMByte_Mod (mod_rm_byte))) ((('b"11")  : mword 2)) then
+      (if eq_vec ((_get_modRMByte_Mod (mod_rm_byte))) (('b"11")) then
          let wrapped_reg := wrap_reg (reg_used) (operand_size) (REX) in
          returnM ((read_offset, rm_REG (wrapped_reg)))
        else
@@ -884,8 +882,8 @@ Definition decode_rm_operand_inner
             (read_GPR (64) ((REG_NORMAL (reg_used)))) >>= fun (w__0 : mword 64) =>
             returnM ((w__0, new_read_offset))) >>= fun '((mem_loc, new_read_offset)
          : (mword 64 * Z)) =>
-         let b__0 := _get_modRMByte_Mod (mod_rm_byte) in
-         (if eq_vec (b__0) ((('b"00")  : mword 2)) return M ((mword 64 * Z)) then
+         let p0_ := _get_modRMByte_Mod (mod_rm_byte) in
+         (if eq_vec (p0_) (('b"00")) return M ((mword 64 * Z)) then
             (if Z.eqb (three_bit_rm_reg) (5) return M ((mword 64 * Z)) then
                (read_memory (4) ((add_vec_int (instruction_ptr) (new_read_offset)))
                   ((create_iFetchAccessDescriptor (tt)))) >>= fun displacement =>
@@ -895,13 +893,13 @@ Definition decode_rm_operand_inner
                returnM ((mem_loc, new_read_offset))
              else returnM ((mem_loc, new_read_offset)))
              : M ((mword 64 * Z))
-          else if eq_vec (b__0) ((('b"01")  : mword 2)) return M ((mword 64 * Z)) then
+          else if eq_vec (p0_) (('b"01")) return M ((mword 64 * Z)) then
             (read_memory (1) ((add_vec_int (instruction_ptr) (new_read_offset)))
                ((create_iFetchAccessDescriptor (tt)))) >>= fun displacement =>
             let mem_loc : bits 64 := add_vec (mem_loc) ((sign_extend (displacement) (64))) in
             let new_read_offset : Z := Z.add (new_read_offset) (1) in
             returnM ((mem_loc, new_read_offset))
-          else if eq_vec (b__0) ((('b"10")  : mword 2)) return M ((mword 64 * Z)) then
+          else if eq_vec (p0_) (('b"10")) return M ((mword 64 * Z)) then
             (read_memory (4) ((add_vec_int (instruction_ptr) (new_read_offset)))
                ((create_iFetchAccessDescriptor (tt)))) >>= fun displacement =>
             let mem_loc : bits 64 := add_vec (mem_loc) ((sign_extend (displacement) (64))) in
@@ -1010,52 +1008,51 @@ Definition fail_if_lock (lock : bool) (operation : string) : M (unit) :=
     : M (unit).
 
 Definition decode_one_byte_instruction
-(b__0 : mword 8) (instruction_ptr : mword 64) (read_offset : Z) (decoded_prefixes : decodedPrefixes)
+(p0_ : mword 8) (instruction_ptr : mword 64) (read_offset : Z) (decoded_prefixes : decodedPrefixes)
 : M (option ((Z * ast))) :=
-   (if eq_vec (b__0) (((Ox"88")  : mword 8)) return M (option ((Z * ast))) then
+   (if eq_vec (p0_) ((Ox"88")) return M (option ((Z * ast))) then
       (fail_if_lock (decoded_prefixes.(decodedPrefixes_lock)) ("MOV")) >>
       (get_Eb_Gb_operands (instruction_ptr) (read_offset) (decoded_prefixes.(decodedPrefixes_REX))) >>= fun '((new_read_offset, operand1, operand2)) =>
       returnM ((Some ((new_read_offset, MOV ((8, operand1, operand2))))))
-    else if eq_vec (b__0) (((Ox"89")  : mword 8)) return M (option ((Z * ast))) then
+    else if eq_vec (p0_) ((Ox"89")) return M (option ((Z * ast))) then
       (fail_if_lock (decoded_prefixes.(decodedPrefixes_lock)) ("MOV")) >>
       (get_Ev_Gv_operands (instruction_ptr) (read_offset) (decoded_prefixes)) >>= fun '((new_read_offset, operand_size, operand1, operand2)) =>
       returnM ((Some ((new_read_offset, MOV ((operand_size, operand1, operand2))))))
-    else if eq_vec (b__0) (((Ox"8A")  : mword 8)) return M (option ((Z * ast))) then
+    else if eq_vec (p0_) ((Ox"8A")) return M (option ((Z * ast))) then
       (fail_if_lock (decoded_prefixes.(decodedPrefixes_lock)) ("MOV")) >>
       (get_Gb_Eb_operands (instruction_ptr) (read_offset) (decoded_prefixes.(decodedPrefixes_REX))) >>= fun '((new_read_offset, operand1, operand2)) =>
       returnM ((Some ((new_read_offset, MOV ((8, operand1, operand2))))))
-    else if eq_vec (b__0) (((Ox"8B")  : mword 8)) return M (option ((Z * ast))) then
+    else if eq_vec (p0_) ((Ox"8B")) return M (option ((Z * ast))) then
       (fail_if_lock (decoded_prefixes.(decodedPrefixes_lock)) ("MOV")) >>
       (get_Gv_Ev_operands (instruction_ptr) (read_offset) (decoded_prefixes)) >>= fun '((new_read_offset, operand_size, operand1, operand2)) =>
       returnM ((Some ((new_read_offset, MOV ((operand_size, operand1, operand2))))))
-    else if eq_vec ((subrange_vec_dec (b__0) (7) (4))) (((Ox"B")  : mword 4))
+    else if eq_vec ((subrange_vec_dec (p0_) (7) (4))) (((Ox"B")  : mword 4))
       return
       M (option ((Z * ast))) then
-      let reg_field := subrange_vec_dec (b__0) (2) (0) in
-      let not_8_bit : bits 1 := subrange_vec_dec (b__0) (3) (3) in
+      let reg_field := subrange_vec_dec (p0_) (2) (0) in
+      let not_8_bit : bits 1 := subrange_vec_dec (p0_) (3) (3) in
       (fail_if_lock (decoded_prefixes.(decodedPrefixes_lock)) ("MOV")) >>
       let reg_index :=
         get_reg_value_in_opcode_byte (reg_field) (decoded_prefixes.(decodedPrefixes_REX)) in
       let reg :=
-        if eq_vec (not_8_bit) ((('b"1")  : mword 1)) then REG_NORMAL (reg_index)
+        if eq_vec (not_8_bit) (('b"1")) then REG_NORMAL (reg_index)
         else wrap_reg (reg_index) (8) (decoded_prefixes.(decodedPrefixes_REX)) in
       let operand_size :=
-        if eq_vec (not_8_bit) ((('b"1")  : mword 1)) then
-          get_operand_size_using_REX (decoded_prefixes) (32)
+        if eq_vec (not_8_bit) (('b"1")) then get_operand_size_using_REX (decoded_prefixes) (32)
         else 8 in
       (read_imm_operand (instruction_ptr) (read_offset) (operand_size)) >>= fun '((new_read_offset, imm)) =>
       returnM ((Some ((new_read_offset, MOV ((operand_size, rm_REG (reg), rmi_IMM (imm)))))))
-    else if eq_vec ((subrange_vec_dec (b__0) (7) (1))) ((('b"1100011")  : mword 7))
+    else if eq_vec ((subrange_vec_dec (p0_) (7) (1))) ((('b"1100011")  : mword 7))
       return
       M (option ((Z * ast))) then
-      let not_8_bit := subrange_vec_dec (b__0) (0) (0) in
+      let not_8_bit := subrange_vec_dec (p0_) (0) (0) in
       (read_mod_rm_byte (instruction_ptr) (read_offset)) >>= fun '((read_offset, mod_rm_byte)) =>
       (if neq_int ((uint ((_get_modRMByte_REG (mod_rm_byte))))) (0) return M (unit) then
          (fail ("The instruction to be decoded is either reserved or not implemented in this model"))
           : M (unit)
        else returnM (tt)) >>
       (fail_if_lock (decoded_prefixes.(decodedPrefixes_lock)) ("MOV")) >>
-      (if eq_vec (not_8_bit) ((('b"1")  : mword 1)) return M ((Z * Z * rm_operand * imm)) then
+      (if eq_vec (not_8_bit) (('b"1")) return M ((Z * Z * rm_operand * imm)) then
          (get_Ev_Iz_operands (instruction_ptr) (read_offset) (decoded_prefixes) (mod_rm_byte))
           : M ((Z * Z * rm_operand * imm))
        else
@@ -1063,39 +1060,39 @@ Definition decode_one_byte_instruction
             (decoded_prefixes.(decodedPrefixes_REX)) (mod_rm_byte)) >>= fun '((new_read_offset, operand1, imm)) =>
          returnM ((new_read_offset, 8, operand1, imm))) >>= fun '((new_read_offset, operand_size, operand1, imm)) =>
       returnM ((Some ((new_read_offset, MOV ((operand_size, operand1, rmi_IMM (imm)))))))
-    else if eq_vec (b__0) (((Ox"30")  : mword 8)) return M (option ((Z * ast))) then
+    else if eq_vec (p0_) ((Ox"30")) return M (option ((Z * ast))) then
       (get_Eb_Gb_operands (instruction_ptr) (read_offset) (decoded_prefixes.(decodedPrefixes_REX))) >>= fun '((new_read_offset, operand1, operand2)) =>
       returnM ((Some
                   ((new_read_offset, XOR
                                        ((decoded_prefixes.(decodedPrefixes_lock), 8, operand1, operand2))))))
-    else if eq_vec (b__0) (((Ox"31")  : mword 8)) return M (option ((Z * ast))) then
+    else if eq_vec (p0_) ((Ox"31")) return M (option ((Z * ast))) then
       (get_Ev_Gv_operands (instruction_ptr) (read_offset) (decoded_prefixes)) >>= fun '((new_read_offset, operand_size, operand1, operand2)) =>
       returnM ((Some
                   ((new_read_offset, XOR
                                        ((decoded_prefixes.(decodedPrefixes_lock), operand_size, operand1, operand2))))))
-    else if eq_vec (b__0) (((Ox"32")  : mword 8)) return M (option ((Z * ast))) then
+    else if eq_vec (p0_) ((Ox"32")) return M (option ((Z * ast))) then
       (get_Gb_Eb_operands (instruction_ptr) (read_offset) (decoded_prefixes.(decodedPrefixes_REX))) >>= fun '((new_read_offset, operand1, operand2)) =>
       returnM ((Some
                   ((new_read_offset, XOR
                                        ((decoded_prefixes.(decodedPrefixes_lock), 8, operand1, operand2))))))
-    else if eq_vec (b__0) (((Ox"33")  : mword 8)) return M (option ((Z * ast))) then
+    else if eq_vec (p0_) ((Ox"33")) return M (option ((Z * ast))) then
       (get_Gv_Ev_operands (instruction_ptr) (read_offset) (decoded_prefixes)) >>= fun '((new_read_offset, operand_size, operand1, operand2)) =>
       returnM ((Some
                   ((new_read_offset, XOR
                                        ((decoded_prefixes.(decodedPrefixes_lock), operand_size, operand1, operand2))))))
-    else if eq_vec ((subrange_vec_dec (b__0) (7) (2))) ((('b"100000")  : mword 6))
+    else if eq_vec ((subrange_vec_dec (p0_) (7) (2))) ((('b"100000")  : mword 6))
       return
       M (option ((Z * ast))) then
-      let suffix := subrange_vec_dec (b__0) (1) (0) in
+      let suffix := subrange_vec_dec (p0_) (1) (0) in
       (read_mod_rm_byte (instruction_ptr) (read_offset)) >>= fun '((read_offset, mod_rm_byte)) =>
-      (if eq_vec (suffix) ((('b"11")  : mword 2)) return M ((Z * Z * rm_operand * imm)) then
+      (if eq_vec (suffix) (('b"11")) return M ((Z * Z * rm_operand * imm)) then
          (get_Ev_Ib_operands (instruction_ptr) (read_offset) (decoded_prefixes) (mod_rm_byte))
           : M ((Z * Z * rm_operand * imm))
-       else if eq_vec (suffix) ((('b"10")  : mword 2)) return M ((Z * Z * rm_operand * imm)) then
+       else if eq_vec (suffix) (('b"10")) return M ((Z * Z * rm_operand * imm)) then
          (fail
             ("Exception #UD — Invalid Opcode (Undefined Opcode): Opcode 0x82 is invalid or not encodable in 64-bit mode"))
           : M ((Z * Z * rm_operand * imm))
-       else if eq_vec (suffix) ((('b"01")  : mword 2)) return M ((Z * Z * rm_operand * imm)) then
+       else if eq_vec (suffix) (('b"01")) return M ((Z * Z * rm_operand * imm)) then
          (get_Ev_Iz_operands (instruction_ptr) (read_offset) (decoded_prefixes) (mod_rm_byte))
           : M ((Z * Z * rm_operand * imm))
        else
@@ -1125,23 +1122,23 @@ Definition decode_one_byte_instruction
          (fail ("The instruction to be decoded is not implemented in this model"))
           : M (option ((Z * ast))))
        : M (option ((Z * ast)))
-    else if eq_vec (b__0) (((Ox"38")  : mword 8)) return M (option ((Z * ast))) then
+    else if eq_vec (p0_) ((Ox"38")) return M (option ((Z * ast))) then
       (fail_if_lock (decoded_prefixes.(decodedPrefixes_lock)) ("CMP")) >>
       (get_Eb_Gb_operands (instruction_ptr) (read_offset) (decoded_prefixes.(decodedPrefixes_REX))) >>= fun '((new_read_offset, operand1, operand2)) =>
       returnM ((Some ((new_read_offset, CMP ((8, operand1, operand2))))))
-    else if eq_vec (b__0) (((Ox"39")  : mword 8)) return M (option ((Z * ast))) then
+    else if eq_vec (p0_) ((Ox"39")) return M (option ((Z * ast))) then
       (fail_if_lock (decoded_prefixes.(decodedPrefixes_lock)) ("CMP")) >>
       (get_Ev_Gv_operands (instruction_ptr) (read_offset) (decoded_prefixes)) >>= fun '((new_read_offset, operand_size, operand1, operand2)) =>
       returnM ((Some ((new_read_offset, CMP ((operand_size, operand1, operand2))))))
-    else if eq_vec (b__0) (((Ox"3A")  : mword 8)) return M (option ((Z * ast))) then
+    else if eq_vec (p0_) ((Ox"3A")) return M (option ((Z * ast))) then
       (fail_if_lock (decoded_prefixes.(decodedPrefixes_lock)) ("CMP")) >>
       (get_Gb_Eb_operands (instruction_ptr) (read_offset) (decoded_prefixes.(decodedPrefixes_REX))) >>= fun '((new_read_offset, operand1, operand2)) =>
       returnM ((Some ((new_read_offset, CMP ((8, operand1, operand2))))))
-    else if eq_vec (b__0) (((Ox"3B")  : mword 8)) return M (option ((Z * ast))) then
+    else if eq_vec (p0_) ((Ox"3B")) return M (option ((Z * ast))) then
       (fail_if_lock (decoded_prefixes.(decodedPrefixes_lock)) ("CMP")) >>
       (get_Gv_Ev_operands (instruction_ptr) (read_offset) (decoded_prefixes)) >>= fun '((new_read_offset, operand_size, operand1, operand2)) =>
       returnM ((Some ((new_read_offset, CMP ((operand_size, operand1, operand2))))))
-    else if eq_vec (b__0) (((Ox"86")  : mword 8)) return M (option ((Z * ast))) then
+    else if eq_vec (p0_) ((Ox"86")) return M (option ((Z * ast))) then
       (get_Eb_Gb_operands (instruction_ptr) (read_offset) (decoded_prefixes.(decodedPrefixes_REX))) >>= fun '((new_read_offset, operand1, operand2)) =>
       match operand2 with
       | rmi_REG reg_content =>
@@ -1149,7 +1146,7 @@ Definition decode_one_byte_instruction
       | _ => (fail ("Operand for XCHG not allowed"))  : M (option ((Z * ast)))
       end
        : M (option ((Z * ast)))
-    else if eq_vec (b__0) (((Ox"87")  : mword 8)) return M (option ((Z * ast))) then
+    else if eq_vec (p0_) ((Ox"87")) return M (option ((Z * ast))) then
       (get_Ev_Gv_operands (instruction_ptr) (read_offset) (decoded_prefixes)) >>= fun '((new_read_offset, operand_size, operand1, operand2)) =>
       match operand2 with
       | rmi_REG reg_content =>
@@ -1157,16 +1154,16 @@ Definition decode_one_byte_instruction
       | _ => (fail ("Operand for XCHG not allowed"))  : M (option ((Z * ast)))
       end
        : M (option ((Z * ast)))
-    else if eq_vec (b__0) (((Ox"6A")  : mword 8)) return M (option ((Z * ast))) then
+    else if eq_vec (p0_) ((Ox"6A")) return M (option ((Z * ast))) then
       (fail_if_lock (decoded_prefixes.(decodedPrefixes_lock)) ("PUSH")) >>
       (read_imm_operand (instruction_ptr) (read_offset) (8)) >>= fun '((new_read_offset, imm)) =>
       returnM ((Some ((new_read_offset, PUSH ((8, rmi_IMM (imm)))))))
-    else if eq_vec (b__0) (((Ox"68")  : mword 8)) return M (option ((Z * ast))) then
+    else if eq_vec (p0_) ((Ox"68")) return M (option ((Z * ast))) then
       (fail_if_lock (decoded_prefixes.(decodedPrefixes_lock)) ("PUSH")) >>
       let operand_size := get_operand_size_ignoring_REX (decoded_prefixes) (32) in
       (read_imm_operand (instruction_ptr) (read_offset) (operand_size)) >>= fun '((new_read_offset, imm)) =>
       returnM ((Some ((new_read_offset, PUSH ((operand_size, rmi_IMM (imm)))))))
-    else if eq_vec (b__0) (((Ox"FF")  : mword 8)) return M (option ((Z * ast))) then
+    else if eq_vec (p0_) ((Ox"FF")) return M (option ((Z * ast))) then
       (read_mod_rm_byte (instruction_ptr) (read_offset)) >>= fun '((new_read_offset, mod_rm_byte)) =>
       (if neq_int ((uint ((_get_modRMByte_REG (mod_rm_byte))))) (6) return M (unit) then
          (fail ("The instruction to be decoded is either reserved or not implemented in this model"))
@@ -1181,23 +1178,23 @@ Definition decode_one_byte_instruction
         | rm_MEM contents => rmi_MEM (contents)
         end in
       returnM ((Some ((final_read_offset, PUSH ((operand_size, operand))))))
-    else if eq_vec ((subrange_vec_dec (b__0) (7) (4))) (((Ox"5")  : mword 4))
+    else if eq_vec ((subrange_vec_dec (p0_) (7) (4))) (((Ox"5")  : mword 4))
       return
       M (option ((Z * ast))) then
-      let reg_field : bits 3 := subrange_vec_dec (b__0) (2) (0) in
-      let is_pop : bits 1 := subrange_vec_dec (b__0) (3) (3) in
+      let reg_field : bits 3 := subrange_vec_dec (p0_) (2) (0) in
+      let is_pop : bits 1 := subrange_vec_dec (p0_) (3) (3) in
       let reg_index :=
         get_reg_value_in_opcode_byte (reg_field) (decoded_prefixes.(decodedPrefixes_REX)) in
       let reg := REG_NORMAL (reg_index) in
       let operand_size := get_operand_size_ignoring_REX (decoded_prefixes) (64) in
-      (if eq_vec (is_pop) ((('b"0")  : mword 1)) return M (option ((Z * ast))) then
+      (if eq_vec (is_pop) (('b"0")) return M (option ((Z * ast))) then
          (fail_if_lock (decoded_prefixes.(decodedPrefixes_lock)) ("PUSH")) >>
          returnM ((Some ((read_offset, PUSH ((operand_size, rmi_REG (reg)))))))
        else
          (fail_if_lock (decoded_prefixes.(decodedPrefixes_lock)) ("POP")) >>
          returnM ((Some ((read_offset, POP ((operand_size, rm_REG (reg))))))))
        : M (option ((Z * ast)))
-    else if eq_vec (b__0) (((Ox"8F")  : mword 8)) return M (option ((Z * ast))) then
+    else if eq_vec (p0_) ((Ox"8F")) return M (option ((Z * ast))) then
       (fail_if_lock (decoded_prefixes.(decodedPrefixes_lock)) ("POP")) >>
       (read_mod_rm_byte (instruction_ptr) (read_offset)) >>= fun '((new_read_offset, mod_rm_byte)) =>
       (if neq_int ((uint ((_get_modRMByte_REG (mod_rm_byte))))) (0) return M (unit) then
@@ -1207,47 +1204,47 @@ Definition decode_one_byte_instruction
       (decode_push_or_pop_rm_operand (instruction_ptr) (new_read_offset) (decoded_prefixes)
          (mod_rm_byte)) >>= fun '((final_read_offset, operand_size, operand)) =>
       returnM ((Some ((final_read_offset, POP ((operand_size, operand))))))
-    else if eq_vec (b__0) (((Ox"00")  : mword 8)) return M (option ((Z * ast))) then
+    else if eq_vec (p0_) ((Ox"00")) return M (option ((Z * ast))) then
       (get_Eb_Gb_operands (instruction_ptr) (read_offset) (decoded_prefixes.(decodedPrefixes_REX))) >>= fun '((new_read_offset, operand1, operand2)) =>
       returnM ((Some
                   ((new_read_offset, ADD
                                        ((decoded_prefixes.(decodedPrefixes_lock), 8, operand1, operand2))))))
-    else if eq_vec (b__0) (((Ox"01")  : mword 8)) return M (option ((Z * ast))) then
+    else if eq_vec (p0_) ((Ox"01")) return M (option ((Z * ast))) then
       (get_Ev_Gv_operands (instruction_ptr) (read_offset) (decoded_prefixes)) >>= fun '((new_read_offset, operand_size, operand1, operand2)) =>
       returnM ((Some
                   ((new_read_offset, ADD
                                        ((decoded_prefixes.(decodedPrefixes_lock), operand_size, operand1, operand2))))))
-    else if eq_vec (b__0) (((Ox"02")  : mword 8)) return M (option ((Z * ast))) then
+    else if eq_vec (p0_) ((Ox"02")) return M (option ((Z * ast))) then
       (get_Gb_Eb_operands (instruction_ptr) (read_offset) (decoded_prefixes.(decodedPrefixes_REX))) >>= fun '((new_read_offset, operand1, operand2)) =>
       returnM ((Some
                   ((new_read_offset, ADD
                                        ((decoded_prefixes.(decodedPrefixes_lock), 8, operand1, operand2))))))
-    else if eq_vec (b__0) (((Ox"03")  : mword 8)) return M (option ((Z * ast))) then
+    else if eq_vec (p0_) ((Ox"03")) return M (option ((Z * ast))) then
       (get_Gv_Ev_operands (instruction_ptr) (read_offset) (decoded_prefixes)) >>= fun '((new_read_offset, operand_size, operand1, operand2)) =>
       returnM ((Some
                   ((new_read_offset, ADD
                                        ((decoded_prefixes.(decodedPrefixes_lock), operand_size, operand1, operand2))))))
-    else if eq_vec (b__0) (((Ox"28")  : mword 8)) return M (option ((Z * ast))) then
+    else if eq_vec (p0_) ((Ox"28")) return M (option ((Z * ast))) then
       (get_Eb_Gb_operands (instruction_ptr) (read_offset) (decoded_prefixes.(decodedPrefixes_REX))) >>= fun '((new_read_offset, operand1, operand2)) =>
       returnM ((Some
                   ((new_read_offset, SUB
                                        ((decoded_prefixes.(decodedPrefixes_lock), 8, operand1, operand2))))))
-    else if eq_vec (b__0) (((Ox"29")  : mword 8)) return M (option ((Z * ast))) then
+    else if eq_vec (p0_) ((Ox"29")) return M (option ((Z * ast))) then
       (get_Ev_Gv_operands (instruction_ptr) (read_offset) (decoded_prefixes)) >>= fun '((new_read_offset, operand_size, operand1, operand2)) =>
       returnM ((Some
                   ((new_read_offset, SUB
                                        ((decoded_prefixes.(decodedPrefixes_lock), operand_size, operand1, operand2))))))
-    else if eq_vec (b__0) (((Ox"2A")  : mword 8)) return M (option ((Z * ast))) then
+    else if eq_vec (p0_) ((Ox"2A")) return M (option ((Z * ast))) then
       (get_Gb_Eb_operands (instruction_ptr) (read_offset) (decoded_prefixes.(decodedPrefixes_REX))) >>= fun '((new_read_offset, operand1, operand2)) =>
       returnM ((Some
                   ((new_read_offset, SUB
                                        ((decoded_prefixes.(decodedPrefixes_lock), 8, operand1, operand2))))))
-    else if eq_vec (b__0) (((Ox"2B")  : mword 8)) return M (option ((Z * ast))) then
+    else if eq_vec (p0_) ((Ox"2B")) return M (option ((Z * ast))) then
       (get_Gv_Ev_operands (instruction_ptr) (read_offset) (decoded_prefixes)) >>= fun '((new_read_offset, operand_size, operand1, operand2)) =>
       returnM ((Some
                   ((new_read_offset, SUB
                                        ((decoded_prefixes.(decodedPrefixes_lock), operand_size, operand1, operand2))))))
-    else if eq_vec (b__0) (((Ox"E8")  : mword 8)) return M (option ((Z * ast))) then
+    else if eq_vec (p0_) ((Ox"E8")) return M (option ((Z * ast))) then
       (fail_if_lock (decoded_prefixes.(decodedPrefixes_lock)) ("CALL")) >>
       (if decoded_prefixes.(decodedPrefixes_op_size_override) return M (unit) then
          (fail ("CALL rel16 is not supported in 64-bit mode"))
@@ -1257,84 +1254,80 @@ Definition decode_one_byte_instruction
          ((create_iFetchAccessDescriptor (tt)))) >>= fun operand =>
       let new_read_offset := Z.add (read_offset) (4) in
       returnM ((Some ((new_read_offset, CALL (operand)))))
-    else if eq_vec (b__0) (((Ox"C9")  : mword 8)) return M (option ((Z * ast))) then
+    else if eq_vec (p0_) ((Ox"C9")) return M (option ((Z * ast))) then
       (fail_if_lock (decoded_prefixes.(decodedPrefixes_lock)) ("LEAVE")) >>
       let operand_size := get_operand_size_ignoring_REX (decoded_prefixes) (64) in
       assert_exp' (orb ((Z.eqb (operand_size) (16))) ((Z.eqb (operand_size) (64)))) "tiny-x86.sail:892.50-892.51" >>= fun _ =>
       returnM ((Some ((read_offset, LEAVE (operand_size)))))
-    else if eq_vec (b__0) (((Ox"C3")  : mword 8)) return M (option ((Z * ast))) then
+    else if eq_vec (p0_) ((Ox"C3")) return M (option ((Z * ast))) then
       (fail_if_lock (decoded_prefixes.(decodedPrefixes_lock)) ("RET")) >>
       returnM ((Some ((read_offset, RET (tt)))))
-    else if orb ((eq_vec (b__0) (((Ox"EB")  : mword 8))))
-              ((orb ((eq_vec (b__0) (((Ox"79")  : mword 8))))
-                  ((eq_vec (b__0) (((Ox"75")  : mword 8))))))
+    else if orb ((eq_vec (p0_) ((Ox"EB"))))
+              ((orb ((eq_vec (p0_) ((Ox"79")))) ((eq_vec (p0_) ((Ox"75"))))))
       return
       M (option ((Z * ast))) then
-      let b__29 := b__0 in
+      let p0_ := p0_ in
       let string_op : string :=
-        if eq_vec (b__29) (((Ox"EB")  : mword 8)) then "JMP"
-        else if eq_vec (b__29) (((Ox"79")  : mword 8)) then "JNS"
-        else if eq_vec (b__29) (((Ox"75")  : mword 8)) then "JNE"
+        if eq_vec (p0_) ((Ox"EB")) then "JMP"
+        else if eq_vec (p0_) ((Ox"79")) then "JNS"
+        else if eq_vec (p0_) ((Ox"75")) then "JNE"
         else "Unreachable op" in
       (fail_if_lock (decoded_prefixes.(decodedPrefixes_lock)) (string_op)) >>
       (read_memory (1) ((add_vec_int (instruction_ptr) (read_offset)))
          ((create_iFetchAccessDescriptor (tt)))) >>= fun operand =>
       let new_read_offset := Z.add (read_offset) (1) in
-      let b__32 := b__0 in
-      returnM ((if eq_vec (b__32) (((Ox"EB")  : mword 8)) then
-                  Some ((new_read_offset, JMP (operand)))
-                else if eq_vec (b__32) (((Ox"79")  : mword 8)) then
-                  Some ((new_read_offset, JNS (operand)))
-                else if eq_vec (b__32) (((Ox"75")  : mword 8)) then
-                  Some ((new_read_offset, JNE (operand)))
+      let p0_ := p0_ in
+      returnM ((if eq_vec (p0_) ((Ox"EB")) then Some ((new_read_offset, JMP (operand)))
+                else if eq_vec (p0_) ((Ox"79")) then Some ((new_read_offset, JNS (operand)))
+                else if eq_vec (p0_) ((Ox"75")) then Some ((new_read_offset, JNE (operand)))
                 else None))
     else returnM (None))
     : M (option ((Z * ast))).
 
 Definition decode_two_byte_instruction
-(b__0 : mword 16) (instruction_ptr : mword 64) (read_offset : Z)
-(decoded_prefixes : decodedPrefixes)
+(p0_ : mword 16) (instruction_ptr : mword 64) (read_offset : Z) (decoded_prefixes : decodedPrefixes)
 : M (option ((Z * ast))) :=
-   (if eq_vec (b__0) (((Ox"0FAE")  : mword 16)) return M (option ((Z * ast))) then
+   (if eq_vec (p0_) ((Ox"0FAE")) return M (option ((Z * ast))) then
       (fail_if_lock (decoded_prefixes.(decodedPrefixes_lock)) ("FENCE")) >>
       (read_mod_rm_byte (instruction_ptr) (read_offset)) >>= fun '((new_read_offset, mod_rm_byte)) =>
-      (if eq_vec ((_get_modRMByte_Mod (mod_rm_byte))) ((('b"11")  : mword 2))
-         return
-         M (option ((Z * ast))) then
-         let b__1 := _get_modRMByte_REG (mod_rm_byte) in
-         (if eq_vec (b__1) ((('b"111")  : mword 3)) return M (option ((Z * ast))) then
-            (if decoded_prefixes.(decodedPrefixes_op_size_override)
-               return
-               M (option ((Z * ast))) then
-               (fail ("Prefix 66H is not allowed in the SFENCE instruction"))
+      (if eq_vec ((_get_modRMByte_Mod (mod_rm_byte))) (('b"11")) return M (option ((Z * ast))) then
+         match _get_modRMByte_REG (mod_rm_byte) with
+         | p0_ =>
+            (if eq_vec (p0_) (('b"111")) return M (option ((Z * ast))) then
+               (if decoded_prefixes.(decodedPrefixes_op_size_override)
+                  return
+                  M (option ((Z * ast))) then
+                  (fail ("Prefix 66H is not allowed in the SFENCE instruction"))
+                   : M (option ((Z * ast)))
+                else returnM ((Some ((new_read_offset, SFENCE (tt))))))
                 : M (option ((Z * ast)))
-             else returnM ((Some ((new_read_offset, SFENCE (tt))))))
-             : M (option ((Z * ast)))
-          else if eq_vec (b__1) ((('b"101")  : mword 3)) return M (option ((Z * ast))) then
-            (if decoded_prefixes.(decodedPrefixes_op_size_override)
-               return
-               M (option ((Z * ast))) then
-               (fail ("Prefix 66H is not allowed in the LFENCE instruction"))
+             else if eq_vec (p0_) (('b"101")) return M (option ((Z * ast))) then
+               (if decoded_prefixes.(decodedPrefixes_op_size_override)
+                  return
+                  M (option ((Z * ast))) then
+                  (fail ("Prefix 66H is not allowed in the LFENCE instruction"))
+                   : M (option ((Z * ast)))
+                else returnM ((Some ((new_read_offset, LFENCE (tt))))))
                 : M (option ((Z * ast)))
-             else returnM ((Some ((new_read_offset, LFENCE (tt))))))
-             : M (option ((Z * ast)))
-          else if eq_vec (b__1) ((('b"110")  : mword 3)) return M (option ((Z * ast))) then
-            (if decoded_prefixes.(decodedPrefixes_op_size_override)
-               return
-               M (option ((Z * ast))) then
-               (fail ("Prefix 66H is not allowed in the MFENCE instruction"))
+             else if eq_vec (p0_) (('b"110")) return M (option ((Z * ast))) then
+               (if decoded_prefixes.(decodedPrefixes_op_size_override)
+                  return
+                  M (option ((Z * ast))) then
+                  (fail ("Prefix 66H is not allowed in the MFENCE instruction"))
+                   : M (option ((Z * ast)))
+                else returnM ((Some ((new_read_offset, MFENCE (tt))))))
                 : M (option ((Z * ast)))
-             else returnM ((Some ((new_read_offset, MFENCE (tt))))))
+             else
+               (fail ("This instruction decode is either reserved or not implemented in this model"))
+                : M (option ((Z * ast))))
              : M (option ((Z * ast)))
-          else
-            (fail ("This instruction decode is either reserved or not implemented in this model"))
-             : M (option ((Z * ast))))
+         end
           : M (option ((Z * ast)))
        else
          (fail ("This instruction decode is not implemented in this model"))
           : M (option ((Z * ast))))
        : M (option ((Z * ast)))
-    else if eq_vec (b__0) (((Ox"0FB0")  : mword 16)) return M (option ((Z * ast))) then
+    else if eq_vec (p0_) ((Ox"0FB0")) return M (option ((Z * ast))) then
       (get_Eb_Gb_operands (instruction_ptr) (read_offset) (decoded_prefixes.(decodedPrefixes_REX))) >>= fun '((new_read_offset, operand1, operand2)) =>
       match operand2 with
       | rmi_REG reg_content =>
@@ -1344,7 +1337,7 @@ Definition decode_two_byte_instruction
       | _ => (fail ("Operand for CMPXCHG not allowed"))  : M (option ((Z * ast)))
       end
        : M (option ((Z * ast)))
-    else if eq_vec (b__0) (((Ox"0FB1")  : mword 16)) return M (option ((Z * ast))) then
+    else if eq_vec (p0_) ((Ox"0FB1")) return M (option ((Z * ast))) then
       (get_Ev_Gv_operands (instruction_ptr) (read_offset) (decoded_prefixes)) >>= fun '((new_read_offset, operand_size, operand1, operand2)) =>
       match operand2 with
       | rmi_REG reg_content =>
@@ -1354,7 +1347,7 @@ Definition decode_two_byte_instruction
       | _ => (fail ("Operand for CMPXCHG not allowed"))  : M (option ((Z * ast)))
       end
        : M (option ((Z * ast)))
-    else if eq_vec (b__0) (((Ox"0FAF")  : mword 16)) return M (option ((Z * ast))) then
+    else if eq_vec (p0_) ((Ox"0FAF")) return M (option ((Z * ast))) then
       (fail_if_lock (decoded_prefixes.(decodedPrefixes_lock)) ("IMUL")) >>
       (get_Gv_Ev_operands (instruction_ptr) (read_offset) (decoded_prefixes)) >>= fun '((new_read_offset, operand_size, rm_operand1, rmi_operand2)) =>
       match (rm_operand1, rmi_operand2) with
@@ -1393,7 +1386,7 @@ Definition decode (instruction_ptr : mword 64) : M (option ((mword 64 * ast))) :
      {| decodedPrefixes_lock := false;
         decodedPrefixes_op_size_override := false;
         decodedPrefixes_mandatory_prefix_66H := false;
-        decodedPrefixes_REX := (Ox"00")  : mword 8 |} in
+        decodedPrefixes_REX := (Ox"00") |} in
    (decode_prefix (instruction_ptr) (decoded_prefixes)) >>= fun (w__0 : (Z * decodedPrefixes)) =>
    let '((tup__0, tup__1)) := w__0  : (Z * decodedPrefixes) in
    let read_offset : Z := tup__0 in
@@ -1449,7 +1442,7 @@ Definition execute_ADD (lock : bool) (operand_size : Z) (dest : rm_operand) (src
 Definition execute_CALL (rel32 : mword 32) : M (unit) :=
    let displacement := sign_extend (rel32) (64) in
    ((read_reg rsp)  : M (mword 64)) >>= fun (w__0 : mword 64) =>
-   write_reg rsp (sub_vec (w__0) ((zero_extend (((Ox"8")  : mword 4)) (64)))) >>
+   write_reg rsp (sub_vec (w__0) ((zero_extend ((Ox"8")) (64)))) >>
    ((read_reg rsp)  : M (mword 64)) >>= fun (w__1 : mword 64) =>
    ((read_reg rip)  : M (mword 64)) >>= fun (w__2 : mword 64) =>
    (write_rm_operand_without_lock (64) ((rm_MEM (w__1))) (w__2)) >>
@@ -1491,13 +1484,13 @@ Definition execute_CMPXCHG (lock : bool) (operand_size : Z) (dest : rm_operand) 
    (read_rm_operand_with_lock (lock) (operand_size) (dest)) >>= fun dest_contents =>
    (if Z.eqb ((uint (rax_portion))) ((uint (dest_contents))) return M (unit) then
       ((read_reg rflags)  : M (mword 64)) >>= fun (w__1 : mword 64) =>
-      write_reg rflags (update_subrange_vec_dec (w__1) (6) (6) ((('b"1")  : mword 1))) >>
+      write_reg rflags (update_subrange_vec_dec (w__1) (6) (6) (('b"1"))) >>
       (read_GPR (operand_size) (src)) >>= fun src_contents =>
       (write_rm_operand_with_lock (lock) (operand_size) (dest) (src_contents))
        : M (unit)
     else
       ((read_reg rflags)  : M (mword 64)) >>= fun (w__2 : mword 64) =>
-      write_reg rflags (update_subrange_vec_dec (w__2) (6) (6) ((('b"0")  : mword 1))) >>
+      write_reg rflags (update_subrange_vec_dec (w__2) (6) (6) (('b"0"))) >>
       (write_GPR (operand_size) ((REG_NORMAL (0))) (dest_contents))
        : M (unit))
     : M (unit).
@@ -1520,15 +1513,15 @@ Definition execute_IMUL (operand_size : Z) (dest : Z) (src : rm_operand)
       return
       M (unit) then
       ((read_reg rflags)  : M (mword 64)) >>= fun (w__0 : mword 64) =>
-      write_reg rflags (update_subrange_vec_dec (w__0) (0) (0) ((('b"0")  : mword 1))) >>
+      write_reg rflags (update_subrange_vec_dec (w__0) (0) (0) (('b"0"))) >>
       ((read_reg rflags)  : M (mword 64)) >>= fun (w__1 : mword 64) =>
-      write_reg rflags (update_subrange_vec_dec (w__1) (11) (11) ((('b"0")  : mword 1)))
+      write_reg rflags (update_subrange_vec_dec (w__1) (11) (11) (('b"0")))
        : M (unit)
     else
       ((read_reg rflags)  : M (mword 64)) >>= fun (w__2 : mword 64) =>
-      write_reg rflags (update_subrange_vec_dec (w__2) (0) (0) ((('b"1")  : mword 1))) >>
+      write_reg rflags (update_subrange_vec_dec (w__2) (0) (0) (('b"1"))) >>
       ((read_reg rflags)  : M (mword 64)) >>= fun (w__3 : mword 64) =>
-      write_reg rflags (update_subrange_vec_dec (w__3) (11) (11) ((('b"1")  : mword 1)))
+      write_reg rflags (update_subrange_vec_dec (w__3) (11) (11) (('b"1")))
        : M (unit))
     : M (unit).
 
@@ -1540,7 +1533,7 @@ Definition execute_JMP (rel8 : mword 8) : M (unit) :=
 
 Definition execute_JNE (rel8 : mword 8) : M (unit) :=
    ((read_reg rflags)  : M (mword 64)) >>= fun (w__0 : mword 64) =>
-   (if eq_vec ((_get_rflags_type_ZF (w__0))) ((('b"0")  : mword 1)) return M (unit) then
+   (if eq_vec ((_get_rflags_type_ZF (w__0))) (('b"0")) return M (unit) then
       (execute_JMP (rel8))
        : M (unit)
     else returnM (tt))
@@ -1548,7 +1541,7 @@ Definition execute_JNE (rel8 : mword 8) : M (unit) :=
 
 Definition execute_JNS (rel8 : mword 8) : M (unit) :=
    ((read_reg rflags)  : M (mword 64)) >>= fun (w__0 : mword 64) =>
-   (if eq_vec ((_get_rflags_type_SF (w__0))) ((('b"0")  : mword 1)) return M (unit) then
+   (if eq_vec ((_get_rflags_type_SF (w__0))) (('b"0")) return M (unit) then
       (execute_JMP (rel8))
        : M (unit)
     else returnM (tt))
@@ -1625,7 +1618,7 @@ Definition execute_PUSH (operand_size : Z) (src : rmi_operand)
    (read_rmi_operand_without_lock (operand_size) (src)) >>= fun w__0 =>
    let src_val := sign_extend (w__0) (64) in
    ((read_reg rsp)  : M (mword 64)) >>= fun (w__1 : mword 64) =>
-   write_reg rsp (sub_vec (w__1) ((zero_extend (((Ox"8")  : mword 4)) (64)))) >>
+   write_reg rsp (sub_vec (w__1) ((zero_extend ((Ox"8")) (64)))) >>
    ((read_reg rsp)  : M (mword 64)) >>= fun (w__2 : mword 64) =>
    let dest_address := rm_MEM (w__2) in
    (write_rm_operand_without_lock (64) (dest_address) (src_val))
@@ -1701,9 +1694,9 @@ Definition execute_XOR (lock : bool) (operand_size : Z) (dest : rm_operand) (src
    let result' := xor_vec (dest_val) (src_val) in
    (write_rm_operand_with_lock (lock) (operand_size) (dest) (result')) >>
    ((read_reg rflags)  : M (mword 64)) >>= fun (w__0 : mword 64) =>
-   write_reg rflags (update_subrange_vec_dec (w__0) (11) (11) ((('b"0")  : mword 1))) >>
+   write_reg rflags (update_subrange_vec_dec (w__0) (11) (11) (('b"0"))) >>
    ((read_reg rflags)  : M (mword 64)) >>= fun (w__1 : mword 64) =>
-   write_reg rflags (update_subrange_vec_dec (w__1) (0) (0) ((('b"0")  : mword 1))) >>
+   write_reg rflags (update_subrange_vec_dec (w__1) (0) (0) (('b"0"))) >>
    (update_sign_flag ((length_mword (src_val))) (result')) >>
    (update_zero_flag ((length_mword (src_val))) (result')) >>
    (update_parity_flag (result'))

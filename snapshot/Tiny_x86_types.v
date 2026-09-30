@@ -15,6 +15,8 @@ Open Scope string.
 Open Scope bool.
 Open Scope Z.
 
+Definition bit : Type := mword 1.
+
 Definition bits (n : Z) : Type := mword n.
 
 Definition reg_index : Type := Z.
@@ -524,6 +526,8 @@ Definition mem_acc_is_exclusive (acc : AccessDescriptor) : bool := false.
 Definition mem_acc_is_atomic_rmw (acc : AccessDescriptor) : bool :=
    andb ((generic_eq (acc.(AccessDescriptor_acctype)) (AccessType_RW)))
      (acc.(AccessDescriptor_atomicop)).
+
+
 
 
 

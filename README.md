@@ -6,7 +6,7 @@ A very simple x86 model
 
 Generated files
 - `snapshot/`: contains Rocq files generated from the Sail specification
-- `coq-sail-tiny-x86.opam`: generated Opam package definition file
+- `rocq-sail-tiny-x86.opam`: generated Opam package definition file
 
 Sail specification
 - `prelude.sail`: contains general configurations and function definitions

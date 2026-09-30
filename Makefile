@@ -3,7 +3,7 @@ MODEL=$(shell cat sail_files)
 MODEL_WITH_TEST=$(MODEL) tests.sail
 # Those 2 are picked up by dune, hence the export
 export SAIL_OPTS=--strict-var
-export SAIL_COQ_OPTS=--coq-record-update
+export SAIL_ROCQ_OPTS=--rocq-record-update
 
 default: rocq
 
